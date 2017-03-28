@@ -1,0 +1,14 @@
+venv/*
+venv3/*
+*.pyc
+.tox/
+.cache/
+.eggs/
+chrononaut.egg-info/
+build/
+dist/
+.coverage
+htmlcov/
+.DS_Store
+.python-version
+docs/_build_html/
