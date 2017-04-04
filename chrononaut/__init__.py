@@ -195,7 +195,7 @@ def create_version(obj, session, deleted=False):
     if len(changed_cols) == 0 and not deleted:
         return
 
-    attr['version'] = obj.version or 1
+    attr['version'] = obj.version or 0
     change_info = obj._capture_change_info()
 
     recorded_changes = fetch_recorded_changes(obj)

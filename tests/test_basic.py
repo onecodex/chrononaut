@@ -36,10 +36,15 @@ def test_versioned_todo(db, session):
     todo.title = 'Task 0.1'
     session.commit()
 
+    # Update it again
+    todo.title = 'Task 0.2'
+    session.commit()
+
     # Check old versions
     prior_todos = todo.versions()
-    assert len(prior_todos) == 1
-    assert prior_todos[0].version == 1  # 1-based indexing (!?)
+    assert len(prior_todos) == 2
+    assert prior_todos[0].version == 0  # 0-based indexing
+    assert prior_todos[1].version == 1
     assert prior_todos[0].title == 'Task 0'
     assert prior_todos[0].__class__.__name__ == 'TodoHistory'
 

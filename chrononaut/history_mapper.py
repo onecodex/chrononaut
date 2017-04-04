@@ -141,6 +141,6 @@ def history_mapper(local_mapper):
 
     if not super_history_mapper:
         local_mapper.local_table.append_column(
-            Column('version', Integer, default=1, nullable=True)
+            Column('version', Integer, default=0, nullable=True)
         )
         local_mapper.add_property("version", local_mapper.local_table.c.version)
