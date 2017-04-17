@@ -47,6 +47,20 @@ def db(app, request):
     db.drop_all()
 
 
+@pytest.yield_fixture(scope='session')
+def strict_db(app, request):
+    """A versioned db fixture.
+    """
+    app.config['CHRONONAUT_REQUIRE_EXTRA_CHANGE_INFO'] = True
+    db = chrononaut.VersionedSQLAlchemy(app)
+    models = generate_test_models(db)
+    for model in models:
+        setattr(db, model.__name__, model)
+    db.create_all()
+    yield db
+    db.drop_all()
+
+
 def generate_test_models(db):
     # A few classes for testing versioning
     class UnversionedTodo(db.Model):
@@ -67,7 +81,7 @@ def generate_test_models(db):
         __tablename__ = 'todos'
         __version_hidden__ = ['done']
         __version_untracked__ = ['starred']
-        id = db.Column('id', db.Integer, primary_key=True)  # FIXME: `todo_id` fails as a column name
+        id = db.Column('id', db.Integer, primary_key=True)  # FIXME: `todo_id` fails as a col name
         title = db.Column(db.String(60))
         text = db.Column(db.String)
         done = db.Column(db.Boolean)

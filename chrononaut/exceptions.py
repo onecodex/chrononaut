@@ -2,9 +2,13 @@
 """
 
 
-class UntrackedAttributeError(AttributeError):
+class ChrononautException(Exception):
     pass
 
 
-class HiddenAttributeError(AttributeError):
+class UntrackedAttributeError(ChrononautException, AttributeError):
+    pass
+
+
+class HiddenAttributeError(ChrononautException, AttributeError):
     pass

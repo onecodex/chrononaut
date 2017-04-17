@@ -16,13 +16,14 @@ from sqlalchemy.orm.exc import UnmappedColumnError
 from sqlalchemy import event
 from sqlalchemy.orm.properties import RelationshipProperty
 
-from flask_sqlalchemy import SQLAlchemy, SignallingSession
+from flask_sqlalchemy import SignallingSession, SQLAlchemy
 
 # For our specific change_info logging
-from flask import request
+from flask import g, request
 from flask.globals import _app_ctx_stack, _request_ctx_stack
 
 # Chrononaut imports
+from chrononaut.exceptions import ChrononautException
 from chrononaut.history_mapper import history_mapper
 
 
@@ -111,12 +112,10 @@ def versioned_session(session):
             create_version(obj, session, deleted=True)
 
 
-def fetch_recorded_changes(obj):
+def fetch_recorded_changes():
     if _app_ctx_stack.top is None:
         return None
-    if not hasattr(obj, '__RECORDED_CHANGES__'):
-        return None
-    return obj.__RECORDED_CHANGES__
+    return getattr(g, '__version_extra_change_info__', None)
 
 
 def create_version(obj, session, deleted=False):
@@ -192,10 +191,16 @@ def create_version(obj, session, deleted=False):
     if len(changed_cols) == 0 and not deleted:
         return
 
+    if (session.app.config.get('CHRONONAUT_REQUIRE_EXTRA_CHANGE_INFO', False) is True and not
+            hasattr(g, '__version_extra_change_info__')):
+        msg = ('Strict tracking is enabled and no g.__version_extra_change_info__ was found. '
+               'Use the `extra_change_info` context manager before committing.')
+        raise ChrononautException(msg)
+
     attr['version'] = obj.version or 0
     change_info = obj._capture_change_info()
 
-    recorded_changes = fetch_recorded_changes(obj)
+    recorded_changes = fetch_recorded_changes()
     if recorded_changes is not None:
         change_info['extra'] = {}
         for key, val in recorded_changes.items():
@@ -205,7 +210,7 @@ def create_version(obj, session, deleted=False):
         change_info['hidden_cols_changed'] = list(changed_cols.intersection(hidden_cols))
     attr['change_info'] = change_info
 
-    # update the history object (nulling any
+    # update the history object (except any hidden cols)
     hist = history_cls()
     for key, value in attr.items():
         if key in hidden_cols:
@@ -217,20 +222,13 @@ def create_version(obj, session, deleted=False):
     obj.version = attr['version'] + 1
 
 
-# TODO: Consider having the context manager set a variable on g or similar and then tear it down,
-#       which we can then require/enforce in the VersionedSQLAlchemy settings as wanted
 @contextmanager
-def record_changes(obj, **kwargs):
+def extra_change_info(**kwargs):
     if _app_ctx_stack.top is None:
-        yield   # TODO: Consider raising an exception here
-    else:
-        if not hasattr(obj, 'versions'):
-            raise AttributeError('Cannot record_changes on an object without '
-                                 'a corresponding `_history` table.')
-        yield
-        obj.__RECORDED_CHANGES__ = {}
-        for key, val in kwargs.items():
-            obj.__RECORDED_CHANGES__[key] = val
+        raise ChrononautException('Can only use `extra_change_info` in a Flask app context.')
+    setattr(g, '__version_extra_change_info__', kwargs)
+    yield
+    delattr(g, '__version_extra_change_info__')
 
 
 class VersionedSignallingSession(SignallingSession):
@@ -244,9 +242,12 @@ versioned_session(VersionedSignallingSession)
 
 
 class VersionedSQLAlchemy(SQLAlchemy):
-    """A subclass of `SQLAlchemy` that uses `VersionedSignallingSession`."""
+    """A subclass of `SQLAlchemy` that uses `VersionedSignallingSession` and supports a
+       `require_extra_change_info` strict change-tracking mode.
+    """
     def create_session(self, options):
         return sqlalchemy.orm.sessionmaker(class_=VersionedSignallingSession, db=self, **options)
 
 
-__all__ = ['VersionedSQLAlchemy', 'VersionedSignallingSession', 'Versioned', 'record_changes']
+__all__ = ['VersionedSQLAlchemy', 'VersionedSignallingSession', 'Versioned',
+           'extra_change_info', 'ChrononautException']

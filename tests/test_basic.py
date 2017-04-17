@@ -8,6 +8,8 @@ import chrononaut
 
 
 def test_unversioned_db_fixture(unversioned_db):
+    """Test unversioned SQLAlchemy object.
+    """
     assert unversioned_db.__class__ == flask_sqlalchemy.SQLAlchemy
     assert unversioned_db.session.__class__ == sqlalchemy.orm.scoping.scoped_session
     assert (unversioned_db.session.session_factory().__class__.__name__ ==
@@ -15,6 +17,8 @@ def test_unversioned_db_fixture(unversioned_db):
 
 
 def test_db_fixture(db):
+    """Test fixtures.
+    """
     assert db.__class__ == chrononaut.VersionedSQLAlchemy
     assert db.session.__class__ == sqlalchemy.orm.scoping.scoped_session
     assert (db.session.session_factory().__class__.__name__ ==
@@ -22,11 +26,15 @@ def test_db_fixture(db):
 
 
 def test_unversioned_todo(db):
+    """Test unversioned class.
+    """
     todo = db.UnversionedTodo('Task 0', 'Testing...')
     assert todo.__class__ == db.UnversionedTodo
 
 
 def test_versioned_todo(db, session):
+    """Test basic versioning.
+    """
     todo = db.Todo('Task 0', 'Testing...')
     assert todo.__class__ == db.Todo
     session.add(todo)
@@ -73,6 +81,8 @@ def test_untracked_columns(db, session):
     assert set(todo.versions()[0].change_info.keys()) == {'ip', 'user_email'}
     with pytest.raises(AttributeError):
         todo.versions()[0].starred
+    with pytest.raises(chrononaut.exceptions.ChrononautException):
+        todo.versions()[0].starred
     with pytest.raises(chrononaut.exceptions.UntrackedAttributeError):
         todo.versions()[0].starred
 
@@ -108,6 +118,8 @@ def test_hidden_columns(db, session):
 
     # Accessing the hidden column from the history model fails
     with pytest.raises(AttributeError):
+        last_todo.done
+    with pytest.raises(chrononaut.exceptions.ChrononautException):
         last_todo.done
     with pytest.raises(chrononaut.exceptions.HiddenAttributeError):
         last_todo.done
