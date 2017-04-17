@@ -1,5 +1,5 @@
 """
-Versioned mixin class and other utilities.
+Versioned mixin class and other utilities. Not Flask specific.
 
 
 Partially derived from/see for reference:
@@ -13,8 +13,7 @@ from datetime import datetime
 
 import pytz
 from sqlalchemy.orm import mapper
-from sqlalchemy import Table, Column, ForeignKeyConstraint, Integer, DateTime
-from sqlalchemy import util
+from sqlalchemy import Table, Column, ForeignKeyConstraint, Integer, DateTime, util
 
 from sqlalchemy.dialects import postgresql
 

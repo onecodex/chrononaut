@@ -1,20 +1,15 @@
 """
-Versioned mixin class and other utilities.
-
-
-Partially derived from/see for reference:
-http://docs.sqlalchemy.org/en/latest/orm/examples.html?highlight=version#module-examples.versioned_history
-http://docs.sqlalchemy.org/en/latest/_modules/examples/versioned_history/test_versioning.html
-http://docs.sqlalchemy.org/en/latest/_modules/examples/versioned_history/history_meta.html
+Main Chrononaut exports: Versioned model mixin, VersionSQLAlchemy db factor, and extra_change_info
+context manager.
 """
 from contextlib import contextmanager
 
 import sqlalchemy
 from sqlalchemy.ext.declarative import declared_attr
-from sqlalchemy.orm import mapper, attributes, object_mapper
-from sqlalchemy.orm.exc import UnmappedColumnError
+from sqlalchemy.orm import mapper
+
 from sqlalchemy import event
-from sqlalchemy.orm.properties import RelationshipProperty
+
 
 from flask_sqlalchemy import SignallingSession, SQLAlchemy
 
@@ -25,6 +20,18 @@ from flask.globals import _app_ctx_stack, _request_ctx_stack
 # Chrononaut imports
 from chrononaut.exceptions import ChrononautException
 from chrononaut.history_mapper import history_mapper
+from chrononaut.flask_versioning import create_version
+
+
+@contextmanager
+def extra_change_info(**kwargs):
+    """A context manager for appending extra change_info to Chrononaut versioned tables.
+    """
+    if _app_ctx_stack.top is None:
+        raise ChrononautException('Can only use `extra_change_info` in a Flask app context.')
+    setattr(g, '__version_extra_change_info__', kwargs)
+    yield
+    delattr(g, '__version_extra_change_info__')
 
 
 class Versioned(object):
@@ -112,125 +119,6 @@ def versioned_session(session):
             create_version(obj, session, deleted=True)
 
 
-def fetch_recorded_changes():
-    if _app_ctx_stack.top is None:
-        return None
-    return getattr(g, '__version_extra_change_info__', None)
-
-
-def create_version(obj, session, deleted=False):
-    obj_mapper = object_mapper(obj)
-    history_mapper = obj.__history_mapper__
-    history_cls = history_mapper.class_
-
-    obj_state = attributes.instance_state(obj)
-
-    attr = {}
-
-    hidden_cols = set(getattr(obj, '__version_hidden__', []))
-    untracked_cols = set(getattr(obj, '__version_untracked__', []))
-
-    changed_cols = set()
-
-    for om, hm in zip(obj_mapper.iterate_to_root(), history_mapper.iterate_to_root()):
-        if hm.single:
-            continue
-
-        for obj_col in om.local_table.c:
-            if 'version_meta' in obj_col.info or obj_col.key in untracked_cols:
-                continue
-
-            # get the value of the attribute based on the MapperProperty related to the
-            # mapped column.  this will allow usage of MapperProperties that have a
-            # different keyname than that of the mapped column.
-            try:
-                prop = obj_mapper.get_property_by_column(obj_col)
-            except UnmappedColumnError:
-                # in the case of single table inheritance, there may be columns on the mapped
-                # table intended for the subclass only. the "unmapped" status of the subclass
-                # column on the base class is a feature of the declarative module.
-                continue
-
-            # expired object attributes and also deferred cols might not be in the dict.
-            # force it to load no matter what by using getattr().
-            if prop.key not in obj_state.dict:
-                getattr(obj, prop.key)
-
-            a, u, d = attributes.get_history(obj, prop.key)
-
-            if d:
-                attr[prop.key] = d[0]
-                changed_cols.add(prop.key)
-            elif u:
-                attr[prop.key] = u[0]
-            elif a:
-                # if the attribute had no value.
-                attr[prop.key] = a[0]
-                changed_cols.add(prop.key)
-
-    if len(changed_cols) == 0:
-        # not changed, but we have relationships. check those too
-        no_init = attributes.PASSIVE_NO_INITIALIZE
-        for prop in obj_mapper.iterate_properties:
-            if hasattr(prop, 'name'):
-                # in case it's a proxy property (synonym), this is correct column name
-                prop_name = prop.name
-            else:
-                # everything else
-                prop_name = prop.key
-            has_changes = attributes.get_history(obj, prop_name, passive=no_init).has_changes()
-            if isinstance(prop, RelationshipProperty) and has_changes:
-                for p in prop.local_columns:
-                    if p.foreign_keys:
-                        changed_cols.add(prop.key)
-                        break
-
-                if len(changed_cols) > 0:
-                    break
-
-    if len(changed_cols) == 0 and not deleted:
-        return
-
-    if (session.app.config.get('CHRONONAUT_REQUIRE_EXTRA_CHANGE_INFO', False) is True and not
-            hasattr(g, '__version_extra_change_info__')):
-        msg = ('Strict tracking is enabled and no g.__version_extra_change_info__ was found. '
-               'Use the `extra_change_info` context manager before committing.')
-        raise ChrononautException(msg)
-
-    attr['version'] = obj.version or 0
-    change_info = obj._capture_change_info()
-
-    recorded_changes = fetch_recorded_changes()
-    if recorded_changes is not None:
-        change_info['extra'] = {}
-        for key, val in recorded_changes.items():
-            change_info['extra'][key] = val
-
-    if len(changed_cols.intersection(hidden_cols)) > 0:
-        change_info['hidden_cols_changed'] = list(changed_cols.intersection(hidden_cols))
-    attr['change_info'] = change_info
-
-    # update the history object (except any hidden cols)
-    hist = history_cls()
-    for key, value in attr.items():
-        if key in hidden_cols:
-            pass
-        else:
-            setattr(hist, key, value)
-
-    session.add(hist)
-    obj.version = attr['version'] + 1
-
-
-@contextmanager
-def extra_change_info(**kwargs):
-    if _app_ctx_stack.top is None:
-        raise ChrononautException('Can only use `extra_change_info` in a Flask app context.')
-    setattr(g, '__version_extra_change_info__', kwargs)
-    yield
-    delattr(g, '__version_extra_change_info__')
-
-
 class VersionedSignallingSession(SignallingSession):
     """A subclass of Flask-SQLAlchemy's SignallingSession that supports
     versioned session information.
@@ -249,5 +137,4 @@ class VersionedSQLAlchemy(SQLAlchemy):
         return sqlalchemy.orm.sessionmaker(class_=VersionedSignallingSession, db=self, **options)
 
 
-__all__ = ['VersionedSQLAlchemy', 'VersionedSignallingSession', 'Versioned',
-           'extra_change_info', 'ChrononautException']
+__all__ = ['VersionedSQLAlchemy', 'Versioned', 'extra_change_info', 'ChrononautException']
