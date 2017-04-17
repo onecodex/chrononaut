@@ -201,7 +201,7 @@ def create_version(obj, session, deleted=False):
     recorded_changes = fetch_recorded_changes(obj)
     if recorded_changes is not None:
         change_info['extra'] = {}
-        for key, val in recorded_changes.iteritems():
+        for key, val in recorded_changes.items():
             change_info['extra'][key] = val
 
     if len(changed_cols.intersection(hide_cols)) > 0:
@@ -220,17 +220,19 @@ def create_version(obj, session, deleted=False):
     obj.version = attr['version'] + 1
 
 
+# TODO: Consider having the context manager set a variable on g or similar and then tear it down,
+#       which we can then require/enforce in the VersionedSQLAlchemy settings as wanted
 @contextmanager
 def record_changes(obj, **kwargs):
     if _app_ctx_stack.top is None:
-        yield
+        yield   # TODO: Consider raising an exception here
     else:
         if not hasattr(obj, "versions"):
             raise AttributeError("Cannot record_changes on an object without "
                                  "a corresponding _history table.")
         yield
         obj.__RECORDED_CHANGES__ = {}
-        for key, val in kwargs.iteritems():
+        for key, val in kwargs.items():
             obj.__RECORDED_CHANGES__[key] = val
 
 
@@ -250,4 +252,4 @@ class VersionedSQLAlchemy(SQLAlchemy):
         return sqlalchemy.orm.sessionmaker(class_=VersionedSignallingSession, db=self, **options)
 
 
-__all__ = ['VersionedSQLAlchemy', 'VersionedSignallingSession', 'Versioned']
+__all__ = ['VersionedSQLAlchemy', 'VersionedSignallingSession', 'Versioned', 'record_changes']
