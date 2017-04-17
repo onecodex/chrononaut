@@ -1,7 +1,8 @@
 """Test basic FlaskSQLAlchemy integration points
 """
-import sqlalchemy
 import flask_sqlalchemy
+import sqlalchemy
+import pytest
 
 import chrononaut
 
@@ -49,22 +50,64 @@ def test_versioned_todo(db, session):
     assert prior_todos[0].__class__.__name__ == 'TodoHistory'
 
 
-def test_omit_version(db, session):
-    todo = db.Todo('Task 0', 'Testing...')
+def test_untracked_columns(db, session):
+    """Test that changes to untracked columns are not tracked
+    """
+    todo = db.Todo('New Task', 'Testing...')
     session.add(todo)
     session.commit()
+    assert len(todo.versions()) == 0
 
+    # Modifying an untracked column does not change the history table
+    assert todo.starred is False
+    todo.starred = True
+    session.commit()
+    assert todo.starred is True
+    assert len(todo.versions()) == 0
+
+    # Create a version and assert that accessing the starred column fails
+    todo.title = 'Newest Task'
+    todo.starred = False
+    session.commit()
+    assert len(todo.versions()) == 1
+    assert set(todo.versions()[0].change_info.keys()) == {'ip', 'user_email'}
+    with pytest.raises(AttributeError):
+        todo.versions()[0].starred
+    with pytest.raises(chrononaut.exceptions.UntrackedAttributeError):
+        todo.versions()[0].starred
+
+
+def test_hidden_columns(db, session):
+    """Test that changes to hidden columns are tracked
+    """
+    todo = db.Todo('Secret Todo', 'Testing...')
+    session.add(todo)
+    session.commit()
+    assert len(todo.versions()) == 0
+
+    # Modifying a hidden column does change the history table
     assert todo.done is False
     todo.done = True
     session.commit()
+    assert todo.done is True
+    assert len(todo.versions()) == 1
 
-    # No change in the history table, omitted columns are *never* saved
-    assert len(todo.versions()) == 0
-
-    # Now change
-    todo.text = 'Done!'
-    session.commit()
-
-    # TODO: Should this throw an OmittedAttribute error of some kind? Probably...
+    # Assert that change info is included for the hidden column
     prior_todo = todo.versions()[0]
-    assert prior_todo.done is None  # Default value
+    assert set(prior_todo.change_info['hidden_cols_changed']) == {'done'}
+
+    # Assert multiple columns are tracked
+    todo.done = False
+    todo.title = 'Not Done'
+    session.commit()
+    last_todo = todo.versions()[-1]
+    assert todo.title == 'Not Done'
+    assert last_todo.title == 'Secret Todo'
+    assert set(last_todo.change_info.keys()) == {'ip', 'user_email', 'hidden_cols_changed'}
+    assert set(last_todo.change_info['hidden_cols_changed']) == {'done'}  # Only keep hidden columns
+
+    # Accessing the hidden column from the history model fails
+    with pytest.raises(AttributeError):
+        last_todo.done
+    with pytest.raises(chrononaut.exceptions.HiddenAttributeError):
+        last_todo.done

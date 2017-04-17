@@ -65,17 +65,20 @@ def generate_test_models(db):
 
     class Todo(db.Model, chrononaut.Versioned):
         __tablename__ = 'todos'
-        __version_omit__ = ['done']
+        __version_hidden__ = ['done']
+        __version_untracked__ = ['starred']
         id = db.Column('id', db.Integer, primary_key=True)  # FIXME: `todo_id` fails as a column name
         title = db.Column(db.String(60))
         text = db.Column(db.String)
         done = db.Column(db.Boolean)
+        starred = db.Column(db.Boolean)
         pub_date = db.Column(db.DateTime)
 
         def __init__(self, title, text):
             self.title = title
             self.text = text
             self.done = False
+            self.starred = False
             self.pub_date = datetime.utcnow()
 
     return Todo, UnversionedTodo

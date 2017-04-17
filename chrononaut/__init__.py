@@ -28,11 +28,10 @@ from chrononaut.history_mapper import history_mapper
 
 class Versioned(object):
     """
-    Can use __version_omit__ to prevent fields from triggering an update (but the fields value are
-      still being saved)
+    Can use __version_untracked__ to prevent fields from triggering an update
 
-    Can also use __version_hide__ to prevent fields from being saved at all (but still triggering
-      an update and saving which column changed in the `change_info` column)
+    Can also use __version_hidden__ to trigger an update (and be captured in the `change_info`
+        column) but not to save the column values
     """
     @declared_attr
     def __mapper_cls__(cls):
@@ -115,7 +114,7 @@ def versioned_session(session):
 def fetch_recorded_changes(obj):
     if _app_ctx_stack.top is None:
         return None
-    if not hasattr(obj, "__RECORDED_CHANGES__"):
+    if not hasattr(obj, '__RECORDED_CHANGES__'):
         return None
     return obj.__RECORDED_CHANGES__
 
@@ -129,8 +128,8 @@ def create_version(obj, session, deleted=False):
 
     attr = {}
 
-    hide_cols = set(getattr(obj, '__version_hide__', []))
-    omit_cols = set(getattr(obj, '__version_omit__', []))
+    hidden_cols = set(getattr(obj, '__version_hidden__', []))
+    untracked_cols = set(getattr(obj, '__version_untracked__', []))
 
     changed_cols = set()
 
@@ -138,11 +137,9 @@ def create_version(obj, session, deleted=False):
         if hm.single:
             continue
 
-        for hist_col in hm.local_table.c:
-            if 'version_meta' in hist_col.info or hist_col.key in omit_cols:
+        for obj_col in om.local_table.c:
+            if 'version_meta' in obj_col.info or obj_col.key in untracked_cols:
                 continue
-
-            obj_col = om.local_table.c[hist_col.key]
 
             # get the value of the attribute based on the MapperProperty related to the
             # mapped column.  this will allow usage of MapperProperties that have a
@@ -204,15 +201,15 @@ def create_version(obj, session, deleted=False):
         for key, val in recorded_changes.items():
             change_info['extra'][key] = val
 
-    if len(changed_cols.intersection(hide_cols)) > 0:
-        change_info['colchanged'] = list(changed_cols.intersection(hide_cols))
+    if len(changed_cols.intersection(hidden_cols)) > 0:
+        change_info['hidden_cols_changed'] = list(changed_cols.intersection(hidden_cols))
     attr['change_info'] = change_info
 
     # update the history object (nulling any
     hist = history_cls()
     for key, value in attr.items():
-        if key in hide_cols:
-            setattr(hist, key, None)
+        if key in hidden_cols:
+            pass
         else:
             setattr(hist, key, value)
 
@@ -227,9 +224,9 @@ def record_changes(obj, **kwargs):
     if _app_ctx_stack.top is None:
         yield   # TODO: Consider raising an exception here
     else:
-        if not hasattr(obj, "versions"):
-            raise AttributeError("Cannot record_changes on an object without "
-                                 "a corresponding _history table.")
+        if not hasattr(obj, 'versions'):
+            raise AttributeError('Cannot record_changes on an object without '
+                                 'a corresponding `_history` table.')
         yield
         obj.__RECORDED_CHANGES__ = {}
         for key, val in kwargs.items():

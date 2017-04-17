@@ -7,6 +7,8 @@ http://docs.sqlalchemy.org/en/latest/orm/examples.html?highlight=version#module-
 http://docs.sqlalchemy.org/en/latest/_modules/examples/versioned_history/test_versioning.html
 http://docs.sqlalchemy.org/en/latest/_modules/examples/versioned_history/history_meta.html
 """
+from chrononaut.exceptions import HiddenAttributeError, UntrackedAttributeError
+
 from datetime import datetime
 
 import pytz
@@ -24,6 +26,10 @@ import warnings
 warnings.simplefilter('ignore', SAWarning)
 
 
+def raise_(ex):
+    raise ex
+
+
 def col_references_table(col, table):
     for fk in col.foreign_keys:
         if fk.references(table):
@@ -34,13 +40,8 @@ def col_references_table(col, table):
 def history_mapper(local_mapper):
     cls = local_mapper.class_
 
-    # set the "active_history" flag on on column-mapped attributes so that the old version
-    # of the info is always loaded (we don't have to do this if we're not copying the values)
-    # TODO: do we need to do this if we're forcing the load using get_attr in create_version?
-    omit_cols = set(getattr(cls, '__version_omit__', []))
     for prop in local_mapper.iterate_properties:
-        if prop.key not in omit_cols:
-            getattr(cls, prop.key).impl.active_history = True
+        getattr(cls, prop.key).impl.active_history = True
 
     super_mapper = local_mapper.inherits
     super_history_mapper = getattr(cls, '__history_mapper__', None)
@@ -57,7 +58,8 @@ def history_mapper(local_mapper):
         return copy
 
     # we don't create copies of these columns on the version table b/c we don't save them anyways
-    hide_cols = set(getattr(cls, '__version_hide__', []))
+    untracked_cols = set(getattr(cls, '__version_untracked__', []))
+    hidden_cols = set(getattr(cls, '__version_hidden__', []))
 
     properties = util.OrderedDict()
     if not super_mapper or local_mapper.local_table is not super_mapper.local_table:
@@ -66,7 +68,9 @@ def history_mapper(local_mapper):
         version_meta = {"version_meta": True}
 
         for column in local_mapper.local_table.c:
-            if 'version_meta' in column.info or column.key in hide_cols:
+            if ('version_meta' in column.info or
+                    column.key in hidden_cols or
+                    column.key in untracked_cols):
                 continue
 
             col = _col_copy(column)
@@ -128,6 +132,17 @@ def history_mapper(local_mapper):
     else:
         bases = local_mapper.base_mapper.class_.__bases__
     versioned_cls = type.__new__(type, "%sHistory" % cls.__name__, bases, {})
+
+    # Finally add @property's raising OmittedAttributeErrors for missing cols
+    for col_name in untracked_cols:
+        msg = '{} is explicitly untracked via __version_untracked__.'.format(col_name)
+        setattr(versioned_cls, col_name,
+                property(lambda _: raise_(UntrackedAttributeError(msg))))
+
+    for col_name in hidden_cols:
+        msg = '{} is explicitly hidden via __version_hidden__'.format(col_name)
+        setattr(versioned_cls, col_name,
+                property(lambda _: raise_(HiddenAttributeError(msg))))
 
     m = mapper(
         versioned_cls,
