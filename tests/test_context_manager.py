@@ -30,11 +30,11 @@ def test_unstrict_session(db, session):
     assert current_app.config.get('CHRONONAUT_REQUIRE_EXTRA_CHANGE_INFO', False) is False
 
 
-def test_strict_session(strict_db, session):
+def test_strict_session(db, session, strict_session):
     assert current_app.config.get('CHRONONAUT_REQUIRE_EXTRA_CHANGE_INFO', False) is True
 
     # The first change should succeed
-    todo = strict_db.Todo('Task 0', 'Strict!')
+    todo = db.Todo('Task 0', 'Strict!')
     session.add(todo)
     session.commit()
 

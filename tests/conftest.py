@@ -21,6 +21,7 @@ def app(request):
     )
     app.config['SECRET_KEY'] = '+BU9wMx=xvD\YV'
     app.config['LOGIN_DISABLED'] = False
+    app.config['WTF_CSRF_ENABLED'] = False
     ctx = app.app_context()
     ctx.push()
 
@@ -50,18 +51,11 @@ def db(app, request):
     db.drop_all()
 
 
-@pytest.yield_fixture(scope='session')
-def strict_db(app, request):
-    """A versioned db fixture.
-    """
+@pytest.yield_fixture(scope='function')
+def strict_session(app, request):
     app.config['CHRONONAUT_REQUIRE_EXTRA_CHANGE_INFO'] = True
-    db = chrononaut.VersionedSQLAlchemy(app)
-    models = generate_test_models(db)
-    for model in models:
-        setattr(db, model.__name__, model)
-    db.create_all()
-    yield db
-    db.drop_all()
+    yield
+    app.config['CHRONONAUT_REQUIRE_EXTRA_CHANGE_INFO'] = False
 
 
 def generate_test_models(db):
@@ -169,8 +163,8 @@ def security_app(app, db):
 @pytest.fixture(scope='function')
 def app_client(security_app, session, db):
     app = security_app()
-    user = db.User(email='test@example.com')
-    user.password = 'password'
+    user = app.security.datastore.create_user(email='test@example.com', password='password',
+                                              active=True)
     session.add(user)
     session.commit()
     client = app.test_client(use_cookies=True)
@@ -181,14 +175,10 @@ def app_client(security_app, session, db):
 def logged_in_user(session, db, app_client):
     user = db.User.query.first()
     with app_client:
+        # Note we have no routes, so 404s if follow_redirects=True
         response = app_client.post('/login', data={
                                    "email": user.email,
-                                   "password": 'password'},
-                                   content_type='application/json',
-                                   follow_redirects=True)
-        print response, response.data
-        assert response.status_code == 200
-        assert user.login_count == 1
+                                   "password": 'password'})
+        assert response.status_code == 302
         assert flask_security.current_user == user
-
         yield user
