@@ -3,7 +3,7 @@
 """
     chrononaut
     ~~~~~~~~~~~~~~~~~~~
-    A history mixin with audit logging, record locking, and time travel for SQLAlchemy
+    A history mixin for audit logging, record locking, and time travel with Flask-SQLAlchemy
     :copyright: (c) 2017 by Reference Genomics, Inc.
     :license: MIT, see LICENSE for more details.
 """
