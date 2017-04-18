@@ -11,3 +11,4 @@ dist/
 htmlcov/
 .DS_Store
 .python-version
+docs/_build_html/
