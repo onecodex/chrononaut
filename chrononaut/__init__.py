@@ -113,19 +113,30 @@ class Versioned(object):
             return mp
         return map
 
-    def versions(self, return_query=False):
+    def versions(self, before=None, after=None, return_query=False):
         """Fetch the history of the given object from its history table.
 
+        :param before: Return changes only _before_ the provided ``DateTime``.
+        :param before: Return changes only _after_ the provided ``DateTime``.
         :param return_query: Return a SQLAlchemy query instead of a list of models.
         :return: List of history models for the given object (or a query object).
         """
         # get the primary keys for this table
         prim_keys = [k.key for k in self.__history_mapper__.primary_key if k.key != 'version']
 
-        # find all previous versions that have the same primary keys as myself
+        # Find all previous versions that have the same primary keys as myself
         query = self.__history_mapper__.class_.query.filter_by(
             **{k: getattr(self, k) for k in prim_keys}
-        ).order_by('version')
+        )
+
+        # Filter additionally by date as needed
+        if before is not None:
+            query = query.filter(self.__history_mapper__.class_.changed <= before)
+        if after is not None:
+            query = query.filter(self.__history_mapper__.class_.changed >= after)
+
+        # Order by the version
+        query = query.order_by(self.__history_mapper__.class_.version)
 
         if return_query:
             return query

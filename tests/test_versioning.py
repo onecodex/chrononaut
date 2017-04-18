@@ -1,3 +1,6 @@
+from datetime import datetime
+import pytz
+
 import pytest
 import chrononaut
 
@@ -93,3 +96,29 @@ def test_hidden_columns(db, session):
         last_todo.done
     with pytest.raises(chrononaut.exceptions.HiddenAttributeError):
         last_todo.done
+
+
+def test_versions_by_date(db, session):
+    time_0 = datetime.now(pytz.utc)
+    todo = db.Todo('Dated Todo', 'Time 0')
+    session.add(todo)
+    session.commit()
+
+    # Changes
+    for ix in range(1, 10):
+        todo.text = 'Time {}'.format(ix)
+        session.commit()
+
+    assert len(todo.versions()) == 9
+    assert len(todo.versions(after=time_0)) == 9
+
+    # Make another set of changes
+    time_1 = datetime.now(pytz.utc)
+    todo.text = 'Time Last'
+    session.commit()
+
+    assert len(todo.versions()) == 10
+    assert len(todo.versions(before=time_1)) == 9
+    assert len(todo.versions(after=time_1)) == 1
+    assert len(todo.versions(after=datetime.now(pytz.utc))) == 0
+    assert len(todo.versions(before=datetime.now(pytz.utc))) == 10

@@ -101,7 +101,8 @@ def history_mapper(local_mapper):
         # "changed" column stores the UTC timestamp of when the history row was created.
         # This column is optional and can be omitted.
         cols.append(
-            Column('changed', DateTime, default=lambda: datetime.now(pytz.utc), info=version_meta)
+            Column('changed', DateTime(timezone=True), default=lambda: datetime.now(pytz.utc),
+                   info=version_meta)
         )
 
         # Append some JSON metadata about the change too
