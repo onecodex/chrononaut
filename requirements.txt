@@ -5,8 +5,10 @@ SQLAlchemy>=1.1.7
 pytz>=2017.2
 psycopg2==2.7.1
 
-# Testing requirements
+# Testing & documentation requirements
 pytest==3.0.7
 coveralls==1.1
 pytest-cov==2.4.0
 Flask-Security-Fork==2.0.1
+sphinx==1.5.5
+sphinx-autobuild==0.6.0

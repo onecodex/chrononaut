@@ -1,8 +1,10 @@
+.. currentmodule:: chrononaut
+
 Chrononaut
 ==========
 
 Chrononaut is a simple package to provide versioning, change tracking, and record
-locking to applications using `Flask-SQLAlchemy`_. It currently supports Postgres as
+locking for applications using `Flask-SQLAlchemy`_. It currently supports Postgres as
 a database backend.
 
 .. _Flask-SQLAlchemy: http://flask-sqlalchemy.pocoo.org/2.1/
@@ -43,12 +45,13 @@ After that, simply add the :class:`Versioned` mixin object to your standard Flas
         login_count = db.Column(db.Integer())
 
 
-
+This creates an ``appuser_history`` table that provides prior record values, along with JSON ``change_info``
+and a ``changed`` microsecond-level timestamp.
 
 
 Using model history
 -------------------
-Chrononaut automatically generates a history table for each model into which you mixin :class:`Versioned`. This history table facilitates ::
+Chrononaut automatically generates a history table for each model into which you mixin :class:`Versioned`. This history table facilitates::
 
     # See if the user has changed their email
     # since they first signed up
@@ -60,9 +63,16 @@ Chrononaut automatically generates a history table for each model into which you
         print('The user has updated their email!')
 
 
+Trying to access fields that are untracked or hidden raises an exception::
+
+    print(original_user_info.password)     # Raises a HiddenAttributeError
+    print(original_user_info.login_count)  # Raises an UntrackedAttributeError
+
+For more information on fetching specific version records see :meth:`Versioned.versions`.
+
 Fine-grained versioning
 -----------------------
-By default, Chrononaut will automatically version
+By default, Chrononaut will automatically version every column in a model.
 
 In the above example, we do not want to retain past user passwords in our history table, so we add ``password`` to the model's ``__chrononaut_hidden__`` property. Changes to a user's password will now result in a new model version and creation of a history record, but the automatically generated ``appuser_history`` table will not have a ``password`` field and will only note that a hidden column was changed in its ``change_info`` JSON column.
 
@@ -81,7 +91,7 @@ In order to use Chrononaut, it's important to keep your ``*_history`` tables in 
 More details
 ------------
 
-More in-depth information on Chrononaut's public API is available below:
+More in-depth information on Chrononaut's API is available below:
 
 .. toctree::
    :maxdepth: 2
