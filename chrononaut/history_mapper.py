@@ -57,8 +57,8 @@ def history_mapper(local_mapper):
         return copy
 
     # we don't create copies of these columns on the version table b/c we don't save them anyways
-    untracked_cols = set(getattr(cls, '__version_untracked__', []))
-    hidden_cols = set(getattr(cls, '__version_hidden__', []))
+    untracked_cols = set(getattr(cls, '__chrononaut_untracked__', []))
+    hidden_cols = set(getattr(cls, '__chrononaut_hidden__', []))
 
     properties = util.OrderedDict()
     if not super_mapper or local_mapper.local_table is not super_mapper.local_table:
@@ -110,7 +110,7 @@ def history_mapper(local_mapper):
         if super_fks:
             cols.append(ForeignKeyConstraint(*zip(*super_fks)))
 
-        history_tablename = getattr(cls, '__version_tablename__',
+        history_tablename = getattr(cls, '__chrononaut_tablename__',
                                     local_mapper.local_table.name + '_history')
         table = Table(history_tablename, local_mapper.local_table.metadata,
                       *cols, schema=local_mapper.local_table.schema)
@@ -136,12 +136,12 @@ def history_mapper(local_mapper):
 
     # Finally add @property's raising OmittedAttributeErrors for missing cols
     for col_name in untracked_cols:
-        msg = '{} is explicitly untracked via __version_untracked__.'.format(col_name)
+        msg = '{} is explicitly untracked via __chrononaut_untracked__.'.format(col_name)
         setattr(versioned_cls, col_name,
                 property(lambda _: raise_(UntrackedAttributeError(msg))))
 
     for col_name in hidden_cols:
-        msg = '{} is explicitly hidden via __version_hidden__'.format(col_name)
+        msg = '{} is explicitly hidden via __chrononaut_hidden__'.format(col_name)
         setattr(versioned_cls, col_name,
                 property(lambda _: raise_(HiddenAttributeError(msg))))
 

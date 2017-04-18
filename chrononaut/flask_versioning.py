@@ -25,8 +25,8 @@ def create_version(obj, session, deleted=False):
 
     attr = {}
 
-    hidden_cols = set(getattr(obj, '__version_hidden__', []))
-    untracked_cols = set(getattr(obj, '__version_untracked__', []))
+    hidden_cols = set(getattr(obj, '__chrononaut_hidden__', []))
+    untracked_cols = set(getattr(obj, '__chrononaut_untracked__', []))
 
     changed_cols = set()
 

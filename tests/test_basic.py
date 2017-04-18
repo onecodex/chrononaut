@@ -127,7 +127,7 @@ def test_hidden_columns(db, session):
 
 def test_table_names(db, session):
     """Check that all expected tables are being generated,
-    including custom `__version_tablename__` settings
+    including custom `__chrononaut_tablename__` settings
     """
     assert (set(db.metadata.tables.keys()) ==
             {'report', 'rep_history', 'todos', 'todos_history', 'unversioned_todos',

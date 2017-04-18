@@ -32,8 +32,8 @@ After that, simply add the :class:`Versioned` mixin object to your standard Flas
     # email and name changes.
     class User(db.Model, Versioned):
         __tablename__ = 'appuser'
-        __version_untracked__ = ['login_count']
-        __version_hidden__ = ['password']
+        __chrononaut_untracked__ = ['login_count']
+        __chrononaut_hidden__ = ['password']
 
         id = db.Column(db.Integer, primary_key=True)
         name = db.Column(db.String(80), unique=False)
@@ -64,14 +64,14 @@ Fine-grained versioning
 -----------------------
 By default, Chrononaut will automatically version
 
-In the above example, we do not want to retain past user passwords in our history table, so we add ``password`` to the model's ``__version_hidden__`` property. Changes to a user's password will now result in a new model version and creation of a history record, but the automatically generated ``appuser_history`` table will not have a ``password`` field and will only note that a hidden column was changed in its ``change_info`` JSON column.
+In the above example, we do not want to retain past user passwords in our history table, so we add ``password`` to the model's ``__chrononaut_hidden__`` property. Changes to a user's password will now result in a new model version and creation of a history record, but the automatically generated ``appuser_history`` table will not have a ``password`` field and will only note that a hidden column was changed in its ``change_info`` JSON column.
 
-Similarly, Chrononaut's ``__version_untracked__`` property allows us to specify that we do not want to track a field at all. This is useful for changes that are regularly incremented, toggled, or otherwise changed but do not need to be tracked. A good example would be a ``starred`` property on an object or other UI state that might be persisted to the database between application sessions.
+Similarly, Chrononaut's ``__chrononaut_untracked__`` property allows us to specify that we do not want to track a field at all. This is useful for changes that are regularly incremented, toggled, or otherwise changed but do not need to be tracked. A good example would be a ``starred`` property on an object or other UI state that might be persisted to the database between application sessions.
 
 
 Migrations
 ----------
-Chrononaut automatically generates a SQLAlchemy model (and corresponding table) for each :class:`Versioned` mixin. By default, this table is named ``tablename_history`` where ``tablename`` is the name of the table for the model. A custom table name may be specified by using the ``__version_tablename__`` property in the model.
+Chrononaut automatically generates a SQLAlchemy model (and corresponding table) for each :class:`Versioned` mixin. By default, this table is named ``tablename_history`` where ``tablename`` is the name of the table for the model. A custom table name may be specified by using the ``__chrononaut_tablename__`` property in the model.
 
 In order to use Chrononaut, it's important to keep your ``*_history`` tables in sync with your main tables. We recommend using `Alembic`_ for migrations which should automatically generate the ``*_history`` tables when you first add the :class:`Versioned` mixins and subsequent updates to your models.
 

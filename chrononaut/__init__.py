@@ -47,8 +47,8 @@ class Versioned(object):
     model.
 
     If you want to mark a column as "untracked" (i.e., do not create a history record),
-    add a `__version_untracked__` field to your model with a list of column names. If you
-    want to hide specific column values, but track the changes, use `__version_hidden__`.
+    add a `__chrononaut_untracked__` field to your model with a list of column names. If you
+    want to hide specific column values, but track the changes, use `__chrononaut_hidden__`.
     The latter will capture which columns were modified in a `hidden_cols_changed` field
     within the `change_info` JSON column on the generated history table.
     """

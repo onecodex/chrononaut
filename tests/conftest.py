@@ -82,8 +82,8 @@ def generate_test_models(db):
 
     class Todo(db.Model, chrononaut.Versioned):
         __tablename__ = 'todos'
-        __version_hidden__ = ['done']
-        __version_untracked__ = ['starred']
+        __chrononaut_hidden__ = ['done']
+        __chrononaut_untracked__ = ['starred']
         id = db.Column('id', db.Integer, primary_key=True)  # FIXME: `todo_id` fails as a col name
         title = db.Column(db.String(60))
         text = db.Column(db.Text)
@@ -100,7 +100,7 @@ def generate_test_models(db):
 
     class Report(db.Model, chrononaut.Versioned):
         __tablename__ = 'report'
-        __version_tablename__ = 'rep_history'
+        __chrononaut_tablename__ = 'rep_history'
         report_id = db.Column(db.Integer, primary_key=True)
         title = db.Column(db.String(60))
         text = db.Column(db.Text)
