@@ -9,3 +9,4 @@ psycopg2==2.7.1
 pytest==3.0.7
 coveralls==1.1
 pytest-cov==2.4.0
+Flask-Security-Fork==2.0.1

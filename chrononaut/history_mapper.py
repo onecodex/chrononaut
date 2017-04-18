@@ -110,7 +110,9 @@ def history_mapper(local_mapper):
         if super_fks:
             cols.append(ForeignKeyConstraint(*zip(*super_fks)))
 
-        table = Table(local_mapper.local_table.name + '_history', local_mapper.local_table.metadata,
+        history_tablename = getattr(cls, '__version_tablename__',
+                                    local_mapper.local_table.name + '_history')
+        table = Table(history_tablename, local_mapper.local_table.metadata,
                       *cols, schema=local_mapper.local_table.schema)
     else:
         # single table inheritance.  take any additional columns that may have

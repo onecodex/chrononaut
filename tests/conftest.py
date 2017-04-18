@@ -2,6 +2,7 @@ from datetime import datetime
 import os
 
 import flask
+import flask_security
 import flask_sqlalchemy
 import sqlalchemy
 
@@ -18,6 +19,8 @@ def app(request):
         'SQLALCHEMY_DATABASE_URI',
         'postgres://postgres@localhost/chrononaut_test'
     )
+    app.config['SECRET_KEY'] = '+BU9wMx=xvD\YV'
+    app.config['LOGIN_DISABLED'] = False
     ctx = app.app_context()
     ctx.push()
 
@@ -83,7 +86,7 @@ def generate_test_models(db):
         __version_untracked__ = ['starred']
         id = db.Column('id', db.Integer, primary_key=True)  # FIXME: `todo_id` fails as a col name
         title = db.Column(db.String(60))
-        text = db.Column(db.String)
+        text = db.Column(db.Text)
         done = db.Column(db.Boolean)
         starred = db.Column(db.Boolean)
         pub_date = db.Column(db.DateTime)
@@ -95,7 +98,33 @@ def generate_test_models(db):
             self.starred = False
             self.pub_date = datetime.utcnow()
 
-    return Todo, UnversionedTodo
+    class Report(db.Model, chrononaut.Versioned):
+        __tablename__ = 'report'
+        __version_tablename__ = 'rep_history'
+        report_id = db.Column(db.Integer, primary_key=True)
+        title = db.Column(db.String(60))
+        text = db.Column(db.Text)
+
+    roles_users = db.Table('roles_users',
+                           db.Column('user_id', db.Integer(), db.ForeignKey('appuser.id')),
+                           db.Column('role_id', db.Integer(), db.ForeignKey('role.id')))
+
+    class User(db.Model, flask_security.UserMixin):
+        __tablename__ = 'appuser'
+        id = db.Column(db.Integer, primary_key=True)
+        email = db.Column(db.String(255), unique=True)
+        password = db.Column(db.String(255))
+        active = db.Column(db.Boolean())
+        confirmed_at = db.Column(db.DateTime())
+        roles = db.relationship('Role', secondary=roles_users,
+                                backref=db.backref('users', lazy='dynamic'))
+
+    class Role(db.Model, flask_security.UserMixin):
+        id = db.Column(db.Integer, primary_key=True)
+        name = db.Column(db.String(80), unique=True)
+        description = db.Column(db.String(255))
+
+    return Todo, UnversionedTodo, Report, User, Role
 
 
 @pytest.yield_fixture(scope='function')
@@ -124,3 +153,42 @@ def session(db, request):
     transaction.rollback()
     connection.close()
     session.remove()
+
+
+@pytest.fixture()
+def security_app(app, db):
+    sqlalchemy_datastore = flask_security.SQLAlchemyUserDatastore(db, db.User, db.Role)
+
+    def create():
+        app.security = flask_security.Security(app, datastore=sqlalchemy_datastore)
+        return app
+
+    return create
+
+
+@pytest.fixture(scope='function')
+def app_client(security_app, session, db):
+    app = security_app()
+    user = db.User(email='test@example.com')
+    user.password = 'password'
+    session.add(user)
+    session.commit()
+    client = app.test_client(use_cookies=True)
+    return client
+
+
+@pytest.yield_fixture(scope='function')
+def logged_in_user(session, db, app_client):
+    user = db.User.query.first()
+    with app_client:
+        response = app_client.post('/login', data={
+                                   "email": user.email,
+                                   "password": 'password'},
+                                   content_type='application/json',
+                                   follow_redirects=True)
+        print response, response.data
+        assert response.status_code == 200
+        assert user.login_count == 1
+        assert flask_security.current_user == user
+
+        yield user

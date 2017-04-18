@@ -78,7 +78,7 @@ def test_untracked_columns(db, session):
     todo.starred = False
     session.commit()
     assert len(todo.versions()) == 1
-    assert set(todo.versions()[0].change_info.keys()) == {'ip', 'user_email'}
+    assert set(todo.versions()[0].change_info.keys()) == {'ip_address', 'user_id'}
     with pytest.raises(AttributeError):
         todo.versions()[0].starred
     with pytest.raises(chrononaut.exceptions.ChrononautException):
@@ -113,7 +113,7 @@ def test_hidden_columns(db, session):
     last_todo = todo.versions()[-1]
     assert todo.title == 'Not Done'
     assert last_todo.title == 'Secret Todo'
-    assert set(last_todo.change_info.keys()) == {'ip', 'user_email', 'hidden_cols_changed'}
+    assert set(last_todo.change_info.keys()) == {'ip_address', 'user_id', 'hidden_cols_changed'}
     assert set(last_todo.change_info['hidden_cols_changed']) == {'done'}  # Only keep hidden columns
 
     # Accessing the hidden column from the history model fails
@@ -123,3 +123,40 @@ def test_hidden_columns(db, session):
         last_todo.done
     with pytest.raises(chrononaut.exceptions.HiddenAttributeError):
         last_todo.done
+
+
+def test_table_names(db, session):
+    """Check that all expected tables are being generated,
+    including custom `__version_tablename__` settings
+    """
+    assert (set(db.metadata.tables.keys()) ==
+            {'report', 'rep_history', 'todos', 'todos_history', 'unversioned_todos',
+             'appuser', 'role', 'roles_users'})
+
+
+def test_change_info_no_user(db, session):
+    """Test that change info is as expected without a user
+    """
+    todo = db.Todo('First Todo', 'Check change info')
+    session.add(todo)
+    session.commit()
+    todo.title = 'Modified'
+    session.commit()
+
+    prior_todo = todo.versions()[0]
+    assert set(prior_todo.change_info.keys()) == {'user_id', 'ip_address'}
+    assert prior_todo.change_info['ip_address'] is None
+    assert prior_todo.change_info['user_id'] is None
+
+
+# def test_change_info(db, session, logged_in_user):
+#     """Test that change info is as expected with a user
+#     """
+#     todo = db.Todo('First Todo', 'Check change info')
+#     session.add(todo)
+#     session.commit()
+#     todo.title = 'Modified'
+#     session.commit()
+
+#     prior_todo = todo.versions()[0]
+#     assert prior_todo.change_info['user_id'] == 'test@example.com'

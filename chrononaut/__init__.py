@@ -1,6 +1,11 @@
+
+# -*- coding: utf-8 -*-
 """
-Main Chrononaut exports: Versioned model mixin, VersionSQLAlchemy db factor, and extra_change_info
-context manager.
+    chrononaut
+    ~~~~~~~~~~~~~~~~~~~
+    A history mixin with audit logging, record locking, and time travel for SQLAlchemy
+    :copyright: (c) 2017 by Reference Genomics, Inc.
+    :license: MIT, see LICENSE for more details.
 """
 from contextlib import contextmanager
 
@@ -25,7 +30,8 @@ from chrononaut.flask_versioning import create_version
 
 @contextmanager
 def extra_change_info(**kwargs):
-    """A context manager for appending extra change_info to Chrononaut versioned tables.
+    """A context manager for appending extra change_info to Chrononaut
+    :class:`Versioned` tables.
     """
     if _app_ctx_stack.top is None:
         raise ChrononautException('Can only use `extra_change_info` in a Flask app context.')
@@ -35,11 +41,16 @@ def extra_change_info(**kwargs):
 
 
 class Versioned(object):
-    """
-    Can use __version_untracked__ to prevent fields from triggering an update
+    """The Versioned mixin should be mixed into a FlaskSQLAlchemy model and used
+    with a VersionedSQLAlchemy database object. This will generate an additional
+    history table in your database and set up automated update tracking for the given
+    model.
 
-    Can also use __version_hidden__ to trigger an update (and be captured in the `change_info`
-        column) but not to save the column values
+    If you want to mark a column as "untracked" (i.e., do not create a history record),
+    add a `__version_untracked__` field to your model with a list of column names. If you
+    want to hide specific column values, but track the changes, use `__version_hidden__`.
+    The latter will capture which columns were modified in a `hidden_cols_changed` field
+    within the `change_info` JSON column on the generated history table.
     """
     @declared_attr
     def __mapper_cls__(cls):
@@ -49,7 +60,12 @@ class Versioned(object):
             return mp
         return map
 
-    def versions(self, raw_query=False):
+    def versions(self, return_query=False):
+        """Fetch the history of the given object from its history table.
+
+        :param return_query: Return a SQLAlchemy query instead of a list of models.
+        :return: List of history models for the given object (or a query object).
+        """
         # get the primary keys for this table
         prim_keys = [k.key for k in self.__history_mapper__.primary_key if k.key != 'version']
 
@@ -58,7 +74,7 @@ class Versioned(object):
             **{k: getattr(self, k) for k in prim_keys}
         )
 
-        if raw_query:
+        if return_query:
             return query
         else:
             return query.all()
@@ -71,8 +87,8 @@ class Versioned(object):
         (3) _get_custom_change_info() which should return a 1-depth dict of additional keys.
         """
         change_info = {
-            'user_email': self._fetch_current_user_email(),
-            'ip': self._fetch_remote_addr(),
+            'user_id': self._fetch_current_user_email(),
+            'ip_address': self._fetch_remote_addr(),
         }
         extra_info = self._get_custom_change_info()
         if extra_info:
@@ -130,8 +146,7 @@ versioned_session(VersionedSignallingSession)
 
 
 class VersionedSQLAlchemy(SQLAlchemy):
-    """A subclass of `SQLAlchemy` that uses `VersionedSignallingSession` and supports a
-       `require_extra_change_info` strict change-tracking mode.
+    """A subclass of `SQLAlchemy` that uses `VersionedSignallingSession`.
     """
     def create_session(self, options):
         return sqlalchemy.orm.sessionmaker(class_=VersionedSignallingSession, db=self, **options)
