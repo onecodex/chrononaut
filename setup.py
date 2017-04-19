@@ -4,8 +4,7 @@
 ------------
 
 ``chrononaut`` is a simple history mixin for SQLAlchemy models,
-adding support for audit logging and record locking primitives,
-as well as time travel!
+adding support for audit logging, record locking, and time travel!
 """
 from setuptools import setup, find_packages
 
@@ -16,7 +15,10 @@ setup(
     name='chrononaut',
     version=__version__,  # noqa
     packages=find_packages(exclude=['*test*']),
-    install_requires=[''],
+    install_requires=['Flask>=0.12', 'Flask-SQLAlchemy>=2.2', 'pytz>=2017.2', 'psycopg2>=2.7.1'],
+    extras_require={
+        'user_info': ['Flask-Login>=0.4.0'],
+    },
     include_package_data=True,
     zip_safe=False,
     dependency_links=[],
@@ -27,10 +29,23 @@ setup(
     keywords='Chrononaut',
     url='https://github.com/onecodex/chrononaut',
     classifiers=[
-        'Environment :: Console',
         'License :: OSI Approved :: MIT License',
+        'Intended Audience :: Developers',
+        'Operating System :: OS Independent',
         'Topic :: Software Development :: Libraries :: Python Modules',
         'Topic :: Internet :: WWW/HTTP',
+        'Framework :: Flask',
+        'Programming Language :: Python',
+        'Programming Language :: Python :: 2',
+        'Programming Language :: Python :: 2.6',
+        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.3',
+        'Programming Language :: Python :: 3.4',
+        'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3.6',
     ],
-    test_suite='tests'
+    test_suite='tests',
+    setup_requires=['pytest-runner'],
+    tests_require=['pytest', 'Flask-Security-Fork'],
 )

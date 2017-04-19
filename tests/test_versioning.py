@@ -31,6 +31,15 @@ def test_versioned_todo(db, session):
     assert prior_todos[0].__class__.__name__ == 'TodoHistory'
 
 
+def test_delete_tracking(db, session):
+    todo = db.SpecialTodo('Special 1', 'To be deleted')
+    session.add(todo)
+    session.commit()
+    session.delete(todo)
+    session.commit()
+    assert len(todo.versions()) == 1
+
+
 def test_untracked_columns(db, session):
     """Test that changes to untracked columns are not tracked
     """
@@ -96,6 +105,32 @@ def test_hidden_columns(db, session):
         last_todo.done
     with pytest.raises(chrononaut.exceptions.HiddenAttributeError):
         last_todo.done
+
+
+def test_versioning_relationships(db, session, logged_in_user):
+    user = db.User.query.first()
+    role = db.Role.query.first()
+    assert user is not None
+    assert role is not None
+    user.email = 'changed_address@example.com'
+    assert len(user.roles) == 0
+    user.roles.append(role)
+    user.primary_role = role
+    session.commit()
+
+    # Relationships are *not* currently versioned, but IDs are
+    # This means many-to-many relationships fail with an AttributeError
+    # since the table isn't versioned
+    with pytest.raises(AttributeError):
+        user.versions()[0].roles
+
+    # But other relationships work via the foreign key column
+    assert user.primary_role == role
+    assert user.versions()[0].primary_role_id is None
+
+    # But not the relationship itself
+    with pytest.raises(AttributeError):
+        user.verions()[0].primary_role
 
 
 def test_version_fetching_and_diffing(db, session):

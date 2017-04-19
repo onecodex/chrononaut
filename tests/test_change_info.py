@@ -13,6 +13,15 @@ def test_change_info_no_user(db, session):
     assert prior_todo.change_info['user_id'] is None
 
 
+def test_change_info_anonymous_user(db, session, anonymous_user):
+    todo = db.Todo('Anonymous Todo', 'Expect no user id')
+    session.add(todo)
+    session.commit()
+    todo.title = 'Modified'
+    session.commit()
+    assert todo.versions()[0].change_info['user_id'] is None
+
+
 def test_change_info(db, session, logged_in_user):
     """Test that change info is as expected with a user
     """

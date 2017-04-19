@@ -37,4 +37,5 @@ def test_table_names(db, session):
     """
     assert (set(db.metadata.tables.keys()) ==
             {'report', 'rep_history', 'todos', 'todos_history', 'unversioned_todos',
-             'appuser', 'role', 'roles_users'})
+             'special_todo', 'special_todo_history',
+             'appuser', 'appuser_history', 'role', 'role_history', 'roles_users'})

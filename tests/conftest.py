@@ -81,9 +81,15 @@ def generate_test_models(db):
         id = db.Column('id', db.Integer, primary_key=True)  # FIXME: `todo_id` fails as a col name
         title = db.Column(db.String(60))
         text = db.Column(db.Text)
+        todo_type = db.Column(db.String(16))
         done = db.Column(db.Boolean)
         starred = db.Column(db.Boolean)
         pub_date = db.Column(db.DateTime)
+
+        __mapper_args__ = {
+            'polymorphic_identity': 'basic',
+            'polymorphic_on': todo_type,
+        }
 
         def __init__(self, title, text):
             self.title = title
@@ -91,6 +97,21 @@ def generate_test_models(db):
             self.done = False
             self.starred = False
             self.pub_date = datetime.utcnow()
+
+    class SpecialTodo(Todo, chrononaut.Versioned):
+        # Joined table inheritance example
+        __tablename__ = "special_todo"
+        __mapper_args__ = {
+            'polymorphic_identity': 'special',
+        }
+        id = db.Column(db.Integer, db.ForeignKey("todos.id"), primary_key=True)
+        special_description = db.Column(db.Text)
+
+    class BoringTodo(Todo, chrononaut.Versioned):
+        # Single table inheritance -- no table of its own
+        __mapper_args__ = {
+            'polymorphic_identity': 'boring',
+        }
 
     class Report(db.Model, chrononaut.Versioned):
         __tablename__ = 'report'
@@ -103,22 +124,24 @@ def generate_test_models(db):
                            db.Column('user_id', db.Integer(), db.ForeignKey('appuser.id')),
                            db.Column('role_id', db.Integer(), db.ForeignKey('role.id')))
 
-    class User(db.Model, flask_security.UserMixin):
+    class Role(db.Model, flask_security.RoleMixin, chrononaut.Versioned):
+        id = db.Column(db.Integer, primary_key=True)
+        name = db.Column(db.String(80), unique=True)
+        description = db.Column(db.String(255))
+
+    class User(db.Model, flask_security.UserMixin, chrononaut.Versioned):
         __tablename__ = 'appuser'
         id = db.Column(db.Integer, primary_key=True)
         email = db.Column(db.String(255), unique=True)
         password = db.Column(db.String(255))
         active = db.Column(db.Boolean())
         confirmed_at = db.Column(db.DateTime())
+        primary_role_id = db.Column(db.Integer, db.ForeignKey('role.id'))
+        primary_role = db.relationship('Role')
         roles = db.relationship('Role', secondary=roles_users,
                                 backref=db.backref('users', lazy='dynamic'))
 
-    class Role(db.Model, flask_security.UserMixin):
-        id = db.Column(db.Integer, primary_key=True)
-        name = db.Column(db.String(80), unique=True)
-        description = db.Column(db.String(255))
-
-    return Todo, UnversionedTodo, Report, User, Role
+    return Todo, UnversionedTodo, SpecialTodo, Report, User, Role
 
 
 @pytest.yield_fixture(scope='function')
@@ -149,26 +172,34 @@ def session(db, request):
     session.remove()
 
 
-@pytest.fixture()
+@pytest.fixture(scope='function')
 def security_app(app, db):
     sqlalchemy_datastore = flask_security.SQLAlchemyUserDatastore(db, db.User, db.Role)
 
-    def create():
-        app.security = flask_security.Security(app, datastore=sqlalchemy_datastore)
-        return app
-
-    return create
+    app.security = flask_security.Security(app, datastore=sqlalchemy_datastore)
+    yield app
+    app.security = None
+    app.blueprints.pop('security')
 
 
 @pytest.fixture(scope='function')
 def app_client(security_app, session, db):
-    app = security_app()
-    user = app.security.datastore.create_user(email='test@example.com', password='password',
-                                              active=True)
+    user = security_app.security.datastore.create_user(email='test@example.com',
+                                                       password='password', active=True)
+    role = db.Role(name='Admin')
     session.add(user)
+    session.add(role)
     session.commit()
-    client = app.test_client(use_cookies=True)
+    client = security_app.test_client(use_cookies=True)
     return client
+
+
+@pytest.fixture(scope='function')
+def anonymous_user(session, db, app_client):
+    with app_client:
+        app_client.post('/login')
+        assert not hasattr(flask_security.current_user, 'email')
+        yield flask_security.current_user
 
 
 @pytest.yield_fixture(scope='function')

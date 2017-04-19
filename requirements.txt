@@ -3,7 +3,7 @@ Flask>=0.12
 Flask-SQLAlchemy>=2.2
 SQLAlchemy>=1.1.7
 pytz>=2017.2
-psycopg2==2.7.1
+psycopg2>=2.7.1
 
 # Testing & documentation requirements
 pytest==3.0.7

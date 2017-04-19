@@ -250,7 +250,7 @@ class Versioned(object):
         try:
             from flask_login import current_user
             return current_user.email if current_user.is_authenticated else None
-        except AttributeError:
+        except ImportError:
             return None
 
     def _fetch_remote_addr(self):
