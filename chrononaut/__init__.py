@@ -11,7 +11,8 @@ from contextlib import contextmanager
 
 import sqlalchemy
 from sqlalchemy.ext.declarative import declared_attr
-from sqlalchemy.orm import mapper
+from sqlalchemy.orm import mapper, object_mapper
+from sqlalchemy.orm.exc import UnmappedColumnError
 
 from sqlalchemy import event
 
@@ -142,6 +143,83 @@ class Versioned(object):
             return query
         else:
             return query.all()
+
+    def version_at(self, at):
+        """Fetch the history model at a specific time (or None)
+
+        :param at: The DateTime at which to find the history record.
+        :return: A history model at the given point in time or the model itself if that is current.
+        """
+        query = self.versions(after=at, return_query=True)
+        history_model = query.first()
+        if history_model is None:
+            return self
+        else:
+            return history_model
+
+    def has_changed_since(self, since):
+        """Check if there are any changes since a given time.
+
+        :param since: The DateTime from which to find any history records
+        :return: ``True`` if there have been any changes. ``False`` if not.
+        """
+        return self.version_at(at=since) is not self
+
+    def diff(self, from_model, to=None, include_hidden=False):
+        """Enumerate the changes from a prior history model to a later history model or the current model's
+        state (if ``to`` is ``None``).
+
+        :param from_model: A history model to diff from.
+        :param to: A history model or ``None``.
+        :return: A dict of column names and ``(from, to)`` value tuples
+        """
+        to_model = to or self
+        untracked_cols = set(getattr(self, '__chrononaut_untracked__', []))
+
+        for k in self.__history_mapper__.primary_key:
+            if k.key == 'version':
+                continue
+            if getattr(from_model, k.key) != getattr(to_model, k.key):
+                raise ChrononautException('You can only diff models with the same primary keys.')
+
+        if not isinstance(from_model, self.__history_mapper__.class_):
+            raise ChrononautException('Cannot diff from a non-history model.')
+
+        if to_model is not self and from_model.changed > to_model.changed:
+            raise ChrononautException('Diffs must be chronological. Your from_model '
+                                      'post-dates your to.')
+
+        # TODO: Refactor this and `create_version` so some of the object mapper
+        #       iteration is not duplicated twice
+        diff = {}
+        obj_mapper = object_mapper(from_model)
+        for om in obj_mapper.iterate_to_root():
+            for obj_col in om.local_table.c:
+                if 'version_meta' in obj_col.info or obj_col.key in untracked_cols:
+                    continue
+                try:
+                    prop = obj_mapper.get_property_by_column(obj_col)
+                except UnmappedColumnError:
+                    continue
+
+                # First check the history model's columns
+                from_val = getattr(from_model, prop.key)
+                to_val = getattr(to_model, prop.key)
+                if from_val != to_val:
+                    diff[prop.key] = (from_val, to_val)
+
+        # If `include_hidden` we need to enumerate through every
+        # model *since* the from_model and see if `change_info` includes
+        # hidden columns. We only need to do this for non-history instances.
+        if include_hidden and isinstance(to_model, self.__class__):
+            from_versions = self.versions(after=from_model.changed)
+            for from_version in from_versions:
+                if 'hidden_cols_changed' in from_version.change_info:
+                    for hidden_col in from_version.change_info['hidden_cols_changed']:
+                        diff[hidden_col] = (None, getattr(to_model, hidden_col))
+                    break
+
+        return diff
 
     def _capture_change_info(self):
         """Capture the change info for the new version. By default calls:

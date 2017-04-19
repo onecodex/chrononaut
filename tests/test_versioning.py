@@ -98,7 +98,7 @@ def test_hidden_columns(db, session):
         last_todo.done
 
 
-def test_versions_by_date(db, session):
+def test_version_fetching_and_diffing(db, session):
     time_0 = datetime.now(pytz.utc)
     todo = db.Todo('Dated Todo', 'Time 0')
     session.add(todo)
@@ -112,9 +112,14 @@ def test_versions_by_date(db, session):
     assert len(todo.versions()) == 9
     assert len(todo.versions(after=time_0)) == 9
 
+    # Assert that they're ordered
+    for ix, version in enumerate(todo.versions()):
+        assert version.text == 'Time {}'.format(ix)
+
     # Make another set of changes
     time_1 = datetime.now(pytz.utc)
     todo.text = 'Time Last'
+    todo.starred = True
     session.commit()
 
     assert len(todo.versions()) == 10
@@ -122,3 +127,58 @@ def test_versions_by_date(db, session):
     assert len(todo.versions(after=time_1)) == 1
     assert len(todo.versions(after=datetime.now(pytz.utc))) == 0
     assert len(todo.versions(before=datetime.now(pytz.utc))) == 10
+
+    # Test version_at
+    first_version = todo.version_at(time_0)
+    assert first_version.text == 'Time 0'
+    assert first_version.__class__.__name__ == 'TodoHistory'
+    ninth_version = todo.version_at(time_1)
+    assert ninth_version.text == 'Time 9'
+    assert ninth_version.__class__.__name__ == 'TodoHistory'
+    current_version = todo.version_at(datetime.now(pytz.utc))
+    assert current_version.text == 'Time Last'
+    assert current_version.__class__.__name__ == 'Todo'
+    assert current_version.starred is True  # untracked field
+
+    # Test has_changed_since
+    assert todo.has_changed_since(time_0) is True
+    assert todo.has_changed_since(time_1) is True
+    assert todo.has_changed_since(datetime.now(pytz.utc)) is False
+
+    # Test diff logic, note the untracked column should not show up
+    assert set(todo.diff(first_version).keys()) == {'text'}
+    assert todo.diff(first_version)['text'] == ('Time 0', 'Time Last')
+    assert todo.diff(ninth_version)['text'] == ('Time 9', 'Time Last')
+    assert todo.diff(first_version, to=ninth_version)['text'] == ('Time 0', 'Time 9')
+
+    # You can only fetch from a history model not another todo
+    other_todo = db.Todo('Other Todo', 'Time -1')
+    session.add(other_todo)
+    session.commit()
+    with pytest.raises(chrononaut.ChrononautException) as e:
+        todo.diff(other_todo)
+    assert e._excinfo[1].message == 'You can only diff models with the same primary keys.'
+
+    with pytest.raises(chrononaut.ChrononautException) as e:
+        todo.diff(todo)
+    assert e._excinfo[1].message == 'Cannot diff from a non-history model.'
+
+    # Similarly you can't diff another models history
+    with pytest.raises(chrononaut.ChrononautException) as e:
+        other_todo.diff(first_version)
+    assert e._excinfo[1].message == 'You can only diff models with the same primary keys.'
+
+    # Nor can you fetch them out of chronological order
+    with pytest.raises(chrononaut.ChrononautException) as e:
+        todo.diff(ninth_version, to=first_version)
+    assert e._excinfo[1].message.startswith('Diffs must be chronological.')
+
+    # Diffs between the same history model *are* permitted however
+    assert todo.diff(ninth_version, to=ninth_version) == {}
+
+    # Now update a hidden column, should show with `include_hidden` option
+    todo.done = True
+    session.commit()
+    set(todo.diff(first_version).keys()) == {'text'}
+    set(todo.diff(first_version, include_hidden=True).keys()) == {'text', 'done'}
+    assert todo.diff(first_version, include_hidden=True)['done'] == (None, True)
