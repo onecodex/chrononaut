@@ -51,7 +51,7 @@ def test_untracked_columns(db, session):
     todo.starred = False
     session.commit()
     assert len(todo.versions()) == 1
-    assert set(todo.versions()[0].change_info.keys()) == {'ip_address', 'user_id'}
+    assert set(todo.versions()[0].change_info.keys()) == {'remote_addr', 'user_id'}
     with pytest.raises(AttributeError):
         todo.versions()[0].starred
     with pytest.raises(chrononaut.exceptions.ChrononautException):
@@ -86,7 +86,7 @@ def test_hidden_columns(db, session):
     last_todo = todo.versions()[-1]
     assert todo.title == 'Not Done'
     assert last_todo.title == 'Secret Todo'
-    assert set(last_todo.change_info.keys()) == {'ip_address', 'user_id', 'hidden_cols_changed'}
+    assert set(last_todo.change_info.keys()) == {'remote_addr', 'user_id', 'hidden_cols_changed'}
     assert set(last_todo.change_info['hidden_cols_changed']) == {'done'}  # Only keep hidden columns
 
     # Accessing the hidden column from the history model fails

@@ -48,7 +48,7 @@ def extra_change_info(**kwargs):
 
         {
             "user_id": "admin@example.com",
-            "ip_address": "127.0.0.1",
+            "remote_addr": "127.0.0.1",
             "extra": {
                 "change_rationale": "User request"
             }
@@ -81,7 +81,7 @@ class Versioned(object):
     The above will then automatically track updates to the ``User`` model and create an
     ``appuser_history`` table for tracking prior versions of each record. By default,
     *all* columns are tracked. By default, change information includes a ``user_id``
-    and ``ip_address``, which are set to automatically populate from Flask-Login's
+    and ``remote_addr``, which are set to automatically populate from Flask-Login's
     ``current_user`` in the :meth:`_capture_change_info` method. Subclass :class:`Versioned`
     and override a combination of :meth:`_capture_change_info`, :meth:`_fetch_current_user_id`,
     and :meth:`_get_custom_change_info`. This ``change_info`` is stored in a JSON column in your
@@ -89,7 +89,7 @@ class Versioned(object):
 
         {
             "user_id": "A unique user ID (string) or None",
-            "ip_address": "The user IP (string) or None",
+            "remote_addr": "The user IP (string) or None",
             "extra": {
                 ...  # Optional extra fields
             },
@@ -229,11 +229,11 @@ class Versioned(object):
         (3) :meth:`_get_custom_change_info` which should return a 1-depth dict of additional keys.
 
         These 3 methods generate a ``change_info`` and with 2+ top-level keys (``user_id``,
-        ``ip_address``, and any keys from :meth:`_get_custom_change_info`)
+        ``remote_addr``, and any keys from :meth:`_get_custom_change_info`)
         """
         change_info = {
             'user_id': self._fetch_current_user_id(),
-            'ip_address': self._fetch_remote_addr(),
+            'remote_addr': self._fetch_remote_addr(),
         }
         extra_info = self._get_custom_change_info()
         if extra_info:
