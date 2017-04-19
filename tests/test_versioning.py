@@ -157,21 +157,21 @@ def test_version_fetching_and_diffing(db, session):
     session.commit()
     with pytest.raises(chrononaut.ChrononautException) as e:
         todo.diff(other_todo)
-    assert e._excinfo[1].message == 'You can only diff models with the same primary keys.'
+    assert e._excinfo[1].args[0] == 'You can only diff models with the same primary keys.'
 
     with pytest.raises(chrononaut.ChrononautException) as e:
         todo.diff(todo)
-    assert e._excinfo[1].message == 'Cannot diff from a non-history model.'
+    assert e._excinfo[1].args[0] == 'Cannot diff from a non-history model.'
 
     # Similarly you can't diff another models history
     with pytest.raises(chrononaut.ChrononautException) as e:
         other_todo.diff(first_version)
-    assert e._excinfo[1].message == 'You can only diff models with the same primary keys.'
+    assert e._excinfo[1].args[0] == 'You can only diff models with the same primary keys.'
 
     # Nor can you fetch them out of chronological order
     with pytest.raises(chrononaut.ChrononautException) as e:
         todo.diff(ninth_version, to=first_version)
-    assert e._excinfo[1].message.startswith('Diffs must be chronological.')
+    assert e._excinfo[1].args[0].startswith('Diffs must be chronological.')
 
     # Diffs between the same history model *are* permitted however
     assert todo.diff(ninth_version, to=ninth_version) == {}
