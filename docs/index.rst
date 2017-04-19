@@ -3,10 +3,11 @@
 Chrononaut
 ==========
 
-Chrononaut is a simple package to provide versioning, change tracking, and record
+`Chrononaut`_ is a simple package to provide versioning, change tracking, and record
 locking for applications using `Flask-SQLAlchemy`_. It currently supports Postgres as
 a database backend.
 
+.. _Chrononaut: https://github.com/onecodex/chrononaut
 .. _Flask-SQLAlchemy: http://flask-sqlalchemy.pocoo.org/2.1/
 
 Getting started
