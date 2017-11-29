@@ -58,6 +58,13 @@ def strict_session(app, request):
     app.config['CHRONONAUT_REQUIRE_EXTRA_CHANGE_INFO'] = False
 
 
+@pytest.yield_fixture(scope='function')
+def extra_change_info(app, request):
+    app.config['CHRONONAUT_EXTRA_CHANGE_INFO_FUNC'] = lambda: {'extra_field': True}
+    yield
+    app.config['CHRONONAUT_EXTRA_CHANGE_INFO_FUNC'] = None
+
+
 def generate_test_models(db):
     # A few classes for testing versioning
     class UnversionedTodo(db.Model):
