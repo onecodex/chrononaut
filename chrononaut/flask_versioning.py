@@ -10,10 +10,13 @@ from sqlalchemy.orm.properties import RelationshipProperty
 from chrononaut.exceptions import ChrononautException
 
 
-def fetch_recorded_changes():
+def fetch_recorded_changes(obj):
     if _app_ctx_stack.top is None:
         return None
-    return getattr(g, '__version_extra_change_info__', None)
+    changes = getattr(g, '__version_extra_change_info__', {})
+    object_changes = getattr(obj, '__CHRONONAUT_RECORDED_CHANGES__', {})
+    changes.update(object_changes)
+    return changes
 
 
 def create_version(obj, session, deleted=False):
@@ -98,8 +101,8 @@ def create_version(obj, session, deleted=False):
     attr['version'] = obj.version or 0
     change_info = obj._capture_change_info()
 
-    recorded_changes = fetch_recorded_changes()
-    if recorded_changes is not None:
+    recorded_changes = fetch_recorded_changes(obj)
+    if recorded_changes:
         change_info['extra'] = {}
         for key, val in recorded_changes.items():
             change_info['extra'][key] = val

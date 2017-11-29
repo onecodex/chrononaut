@@ -1,5 +1,5 @@
 from flask import current_app
-from chrononaut import extra_change_info
+from chrononaut import append_change_info, extra_change_info
 import chrononaut
 
 import pytest
@@ -24,6 +24,20 @@ def test_extra_change_info(db, session):
     session.commit()
 
     assert 'extra' not in todo.versions()[1].change_info.keys()
+
+
+def test_append_change_info(db, session):
+    todo = db.Todo('Task 0', 'Append direct')
+    session.add(todo)
+    session.commit()
+
+    with append_change_info(todo, reason='Extra object info'):
+        todo.title = 'Task -1'
+
+    # Commit does *not* need to be in the block
+    session.commit()
+
+    assert todo.versions()[0].change_info['extra']['reason'] == 'Extra object info'
 
 
 def test_unstrict_session(db, session):
