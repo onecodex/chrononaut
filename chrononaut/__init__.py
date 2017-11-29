@@ -32,12 +32,14 @@ from chrononaut.flask_versioning import create_version
 @contextmanager
 def extra_change_info(**kwargs):
     """A context manager for appending extra ``change_info`` into Chrononaut
-    history records for :class:`Versioned` models.
+    history records for :class:`Versioned` models. Supports appending
+    changes to multiple individual objects of the same or varied classes.
 
     Usage::
 
         with extra_change_info(change_rationale='User request'):
             user.email = 'new-email@example.com'
+            letter.subject = 'Welcome New User!'
             db.session.commit()
 
     Note that the ``db.session.commit()`` change needs to occur within the context manager block
@@ -59,6 +61,35 @@ def extra_change_info(**kwargs):
     setattr(g, '__version_extra_change_info__', kwargs)
     yield
     delattr(g, '__version_extra_change_info__')
+
+
+@contextmanager
+def append_change_info(obj, **kwargs):
+    """A context manager for appending extra ``change`` info
+    directly onto a single model instance. Use :func:`extra_change_info`
+    for tracking multiple objects of the same or different classes.
+
+    Usage::
+
+        with append_change_info(user, change_rationale='User request'):
+            user.email = 'new-email@example.com'
+            db.session.commit()
+
+    Note that ``db.session.commit()`` does *not* need to occur within the context manager
+    block for additional fields to be appended. Changes take the same form as with
+    :func:`extra_change_info`.
+    """
+    if _app_ctx_stack.top is None:
+        raise ChrononautException('Can only use `append_change_info` in a Flask app context.')
+
+    if not hasattr(obj, 'versions'):
+        raise ChrononautException('Cannot append_change_info to an object that is not Versioned.')
+
+    obj.__CHRONONAUT_RECORDED_CHANGES__ = {}
+    for key, val in kwargs.items():
+        obj.__CHRONONAUT_RECORDED_CHANGES__[key] = val
+
+    yield
 
 
 def _in_flask_context():
@@ -326,4 +357,5 @@ class VersionedSQLAlchemy(SQLAlchemy):
         return sqlalchemy.orm.sessionmaker(class_=VersionedSignallingSession, db=self, **options)
 
 
-__all__ = ['VersionedSQLAlchemy', 'Versioned', 'extra_change_info', 'ChrononautException']
+__all__ = ['VersionedSQLAlchemy', 'Versioned', 'append_change_info', 'extra_change_info',
+           'ChrononautException']
