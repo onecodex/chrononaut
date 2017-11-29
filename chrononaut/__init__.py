@@ -295,11 +295,18 @@ class Versioned(object):
 
     def _get_custom_change_info(self):
         """Optionally return additional ``change_info`` fields to be
-        inserted into the history record.
+        inserted into the history record. By default, this checks for a Flask app
+        config variable `CHRONONAUT_EXTRA_CHANGE_INFO_FUNC` and calls the callable
+        stored there (note that this may need to be wrapped with `staticfunction`).
+        If not defined, returns no additional change info. Note that :class:`Versioned`
+        may be subclassed to further refine how custom change info is generated and propagated.
 
         :return: A dictionary of additional ``change_info`` keys and values
         """
-        pass
+        extra_info = self._sa_instance_state.session.app.config.get('CHRONONAUT_EXTRA_CHANGE_INFO_FUNC')
+        if extra_info:
+            return extra_info()
+        return None
 
 
 def versioned_objects(iter):
