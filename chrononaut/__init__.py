@@ -139,11 +139,11 @@ class Versioned(object):
     """
     @declared_attr
     def __mapper_cls__(cls):
-        def map(cls, *arg, **kw):
+        def map_function(cls, *arg, **kw):
             mp = mapper(cls, *arg, **kw)
             history_mapper(mp)
             return mp
-        return map
+        return map_function
 
     def versions(self, before=None, after=None, return_query=False):
         """Fetch the history of the given object from its history table.
@@ -309,8 +309,8 @@ class Versioned(object):
         return None
 
 
-def versioned_objects(iter):
-    for obj in iter:
+def versioned_objects(items):
+    for obj in items:
         if hasattr(obj, '__history_mapper__'):
             yield obj
 
