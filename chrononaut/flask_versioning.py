@@ -10,13 +10,18 @@ from sqlalchemy.orm.properties import RelationshipProperty
 from chrononaut.exceptions import ChrononautException
 
 
-def fetch_recorded_changes(obj):
+def fetch_change_info(obj):
+    change_info = obj._capture_change_info()
     if _app_ctx_stack.top is None:
-        return None
-    changes = getattr(g, '__version_extra_change_info__', {})
-    object_changes = getattr(obj, '__CHRONONAUT_RECORDED_CHANGES__', {})
-    changes.update(object_changes)
-    return changes
+        return change_info
+
+    extra_change_info = {}
+    extra_change_info.update(getattr(g, '__version_extra_change_info__', {}))
+    extra_change_info.update(getattr(obj, '__CHRONONAUT_RECORDED_CHANGES__', {}))
+    if extra_change_info:
+        change_info['extra'] = extra_change_info
+
+    return change_info
 
 
 def create_version(obj, session, deleted=False):
@@ -99,13 +104,7 @@ def create_version(obj, session, deleted=False):
         raise ChrononautException(msg)
 
     attr['version'] = obj.version or 0
-    change_info = obj._capture_change_info()
-
-    recorded_changes = fetch_recorded_changes(obj)
-    if recorded_changes:
-        change_info['extra'] = {}
-        for key, val in recorded_changes.items():
-            change_info['extra'][key] = val
+    change_info = fetch_change_info(obj)
 
     if len(changed_cols.intersection(hidden_cols)) > 0:
         change_info['hidden_cols_changed'] = list(changed_cols.intersection(hidden_cols))

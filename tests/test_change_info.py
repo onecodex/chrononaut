@@ -1,3 +1,7 @@
+import pytz
+from datetime import datetime
+
+
 def test_change_info_no_user(db, session):
     """Test that change info is as expected without a user
     """
@@ -46,3 +50,12 @@ def test_custom_change_info(db, session, extra_change_info):
 
     prior_todo = todo.versions()[0]
     assert prior_todo.change_info['extra_field'] is True
+
+
+def test_change_info_mixin(db, session, logged_in_user):
+    note = db.ChangeLog(note='Creating a new change note...')
+    session.add(note)
+    session.commit()
+    assert note.change_info['user_id'] == 'test@example.com'
+    assert note.change_info['remote_addr'] == '127.0.0.1'
+    assert (datetime.now(pytz.utc) - note.changed).total_seconds() < 1

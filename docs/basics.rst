@@ -14,6 +14,8 @@ Core library classes
 
 .. autoclass:: VersionedSQLAlchemy
 
+.. autoclass:: RecordChanges
+
 
 Helper functions
 ----------------
