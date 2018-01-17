@@ -23,3 +23,5 @@ Helper functions
 .. autofunction:: extra_change_info
 
 .. autofunction:: append_change_info
+
+.. autofunction:: rationale

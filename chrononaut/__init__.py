@@ -17,7 +17,7 @@ from flask_sqlalchemy import SignallingSession, SQLAlchemy
 
 # Chrononaut imports
 from chrononaut.change_info import append_recorded_changes, RecordChanges
-from chrononaut.context_managers import append_change_info, extra_change_info
+from chrononaut.context_managers import append_change_info, extra_change_info, rationale
 from chrononaut.exceptions import ChrononautException
 from chrononaut.flask_versioning import create_version
 from chrononaut.versioned import Versioned
@@ -90,4 +90,4 @@ class VersionedSQLAlchemy(SQLAlchemy):
 
 
 __all__ = ['VersionedSQLAlchemy', 'Versioned', 'RecordChanges',
-           'append_change_info', 'extra_change_info', 'ChrononautException']
+           'append_change_info', 'extra_change_info', 'rationale', 'ChrononautException']
