@@ -1,5 +1,5 @@
 import pytz
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 def test_change_info_no_user(db, session):
@@ -59,3 +59,17 @@ def test_change_info_mixin(db, session, logged_in_user):
     assert note.change_info['user_id'] == 'test@example.com'
     assert note.change_info['remote_addr'] == '127.0.0.1'
     assert (datetime.now(pytz.utc) - note.changed).total_seconds() < 1
+    assert note.version == 0
+    assert note.versions() == []
+
+    # Now make a change
+    note.note = 'Updating our note'
+    session.commit()
+
+    # Also check that versions query works
+    now = datetime.now(pytz.utc)
+    before_test = now - timedelta(60)
+    assert note.version == 1
+    assert len(note.versions(before=now)) == 1
+    assert len(note.versions(before=before_test)) == 0
+    assert len(note.versions(after=now)) == 0

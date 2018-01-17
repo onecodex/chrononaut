@@ -148,9 +148,9 @@ def generate_test_models(db):
         roles = db.relationship('Role', secondary=roles_users,
                                 backref=db.backref('users', lazy='dynamic'))
 
-    class ChangeLog(db.Model, chrononaut.change_info.RecordChanges):
+    class ChangeLog(db.Model, chrononaut.RecordChanges, chrononaut.Versioned):
         id = db.Column(db.Integer, primary_key=True)
-        note = db.Text()
+        note = db.Column(db.Text)
 
     return Todo, UnversionedTodo, SpecialTodo, Report, User, Role, ChangeLog
 

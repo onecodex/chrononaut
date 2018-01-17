@@ -61,17 +61,20 @@ class Versioned(ChangeInfoMixin):
         :param return_query: Return a SQLAlchemy query instead of a list of models.
         :return: List of history models for the given object (or a query object).
         """
-        # get the primary keys for this table
+        # If the model has the RecordChanges mixin, only query the history table as needed
+        if hasattr(self, '__chrononaut_record_change_info__'):
+            if before is not None and self.changed > before:
+                return [] if not return_query else self.query.filter(False)
+            if after is not None and self.changed < after:
+                return [] if not return_query else self.query.filter(False)
+
+        # Get the primary keys for this table
         prim_keys = [k.key for k in self.__history_mapper__.primary_key if k.key != 'version']
 
         # Find all previous versions that have the same primary keys as myself
         query = self.__history_mapper__.class_.query.filter_by(
             **{k: getattr(self, k) for k in prim_keys}
         )
-
-        # If the model has the RecordChangeInfo mixin, only query the history table as needed
-        if hasattr(self, '__chrononaut_record_change_info__'):
-            pass
 
         # Filter additionally by date as needed
         if before is not None:
