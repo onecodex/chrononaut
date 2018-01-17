@@ -1,5 +1,5 @@
 from flask import current_app
-from chrononaut import append_change_info, extra_change_info
+from chrononaut import append_change_info, extra_change_info, rationale
 import chrononaut
 
 import pytest
@@ -62,3 +62,14 @@ def test_strict_session(db, session, strict_session):
         todo.title = 'Updated'
         session.commit()
     assert todo.title == 'Updated'
+
+
+def test_rationale(db, session):
+    todo = db.Todo('Task 0', 'Do it.')
+    session.add(todo)
+    session.commit()
+
+    todo.title = 'Updated for testing...'
+    with rationale('For testing!'):
+        session.commit()
+    assert todo.versions()[0].change_info['extra']['rationale'] == 'For testing!'

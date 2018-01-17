@@ -39,6 +39,31 @@ def extra_change_info(**kwargs):
 
 
 @contextmanager
+def rationale(rationale):
+    """A simplified version of the :func:`extra_change_info` context manager that
+    accepts only a rationale string and stores it in the extra change info.
+
+    Usage::
+
+        with rationale('Updating per user request, see GH #1732'):
+            user.email = 'updated@example.com'
+            db.session.commit()
+
+    This would yield a ``change_info`` like the following::
+
+        {
+            "user_id": "admin@example.com",
+            "remote_addr": "127.0.0.1",
+            "extra": {
+                "rationale": "Updating per user request, see GH #1732"
+            }
+        }
+    """
+    with extra_change_info(rationale=rationale):
+        yield
+
+
+@contextmanager
 def append_change_info(obj, **kwargs):
     """A context manager for appending extra ``change`` info
     directly onto a single model instance. Use :func:`extra_change_info`
