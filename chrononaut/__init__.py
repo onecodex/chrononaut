@@ -16,7 +16,7 @@ from flask_sqlalchemy import SignallingSession, SQLAlchemy
 
 
 # Chrononaut imports
-from chrononaut.change_info import append_recorded_changes, RecordChanges
+from chrononaut.change_info import append_recorded_changes, RecordChanges, increment_version_on_insert
 from chrononaut.context_managers import append_change_info, extra_change_info, rationale
 from chrononaut.exceptions import ChrononautException
 from chrononaut.flask_versioning import create_version
@@ -37,6 +37,8 @@ def versioned_session(session):
         for obj in session.new:
             if hasattr(obj, '__chrononaut_record_change_info__'):
                 append_recorded_changes(obj, session)
+            if hasattr(obj, '__chrononaut_primary_key_nonunique__'):
+                increment_version_on_insert(obj)
 
         for obj in session.dirty:
             if hasattr(obj, '__history_mapper__'):
