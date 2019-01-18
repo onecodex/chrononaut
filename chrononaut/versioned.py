@@ -111,6 +111,17 @@ class Versioned(ChangeInfoMixin):
         """
         return self.version_at(at=since) is not self
 
+    def previous_version(self):
+        """Fetch the previous version of this model (or None)
+
+        :return: A history model, or ``None`` if no history exists
+        """
+        query = self.versions(return_query=True)
+
+        # order_by(None) resets order_by() called in versions()
+        query = query.order_by(None).order_by(self.__history_mapper__.class_.version.desc())
+        return query.first()
+
     def diff(self, from_model, to=None, include_hidden=False):
         """Enumerate the changes from a prior history model to a later history model or the current model's
         state (if ``to`` is ``None``).

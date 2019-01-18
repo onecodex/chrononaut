@@ -102,3 +102,14 @@ def append_recorded_changes(obj, session):
 
     obj.change_info = fetch_change_info(obj)
     obj.changed = datetime.now(pytz.utc)
+
+
+def increment_version_on_insert(obj):
+    """Increments the version of the object to +1 after the last version in history. This will only
+    ever be called when inserting a row into the table, and is only necessary when there may be
+    primary key collisions on the main table in columns other than `version`.
+    """
+    history_model = obj.previous_version()
+
+    if history_model is not None:
+        obj.version = history_model.version + 1
