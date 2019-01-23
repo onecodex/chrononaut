@@ -85,13 +85,14 @@ def generate_test_models(db):
         __tablename__ = 'todos'
         __chrononaut_hidden__ = ['done']
         __chrononaut_untracked__ = ['starred']
+        __chrononaut_disable_indices__ = True
         id = db.Column('id', db.Integer, primary_key=True)  # FIXME: `todo_id` fails as a col name
         title = db.Column(db.String(60))
         text = db.Column(db.Text)
         todo_type = db.Column(db.String(16))
         done = db.Column(db.Boolean)
         starred = db.Column(db.Boolean)
-        pub_date = db.Column(db.DateTime)
+        pub_date = db.Column(db.DateTime, index=True)
 
         __mapper_args__ = {
             'polymorphic_identity': 'basic',
@@ -132,7 +133,7 @@ def generate_test_models(db):
         __chrononaut_tablename__ = 'rep_history'
         __chrononaut_copy_validators__ = True
         report_id = db.Column(db.Integer, primary_key=True)
-        title = db.Column(db.String(60))
+        title = db.Column(db.String(60), index=True)
         text = db.Column(db.Text)
 
         @sqlalchemy.orm.validates('title')

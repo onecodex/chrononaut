@@ -69,6 +69,19 @@ def test_validation_transfer(db, session):
     prior_todo.todo_type = 'invalid_type'
 
 
+def test_index_transfer(db):
+    # Check that indices were not transferred to history table
+    assert db.Todo.__chrononaut_disable_indices__ is True
+    assert db.Todo.pub_date.index is True
+    assert db.Todo.__history_mapper__.columns.pub_date.index is None
+
+    # Check that indices /were/ transferred to history table
+    with pytest.raises(AttributeError):
+        db.Report.__chrononaut_disable_indices__
+    assert db.Report.title.index is True
+    assert db.Report.__history_mapper__.columns.title.index is True
+
+
 def test_delete_tracking(db, session):
     todo = db.SpecialTodo('Special 1', 'To be deleted')
     session.add(todo)

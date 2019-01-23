@@ -74,6 +74,10 @@ def history_mapper(local_mapper):
 
             col = _col_copy(column)
 
+            # disable user-specified column indices on history tables, if indicated
+            if col.index is True and getattr(cls, '__chrononaut_disable_indices__', False):
+                col.index = None
+
             if super_mapper and col_references_table(column, super_mapper.local_table):
                 super_fks.append(
                     (col.key, list(super_history_mapper.local_table.primary_key)[0])
