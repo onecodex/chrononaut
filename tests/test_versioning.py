@@ -71,7 +71,7 @@ def test_validation_transfer(db, session):
 
 def test_index_transfer(db):
     # Check that indices were not transferred to history table
-    assert db.Todo.__chrononaut_disable_indices__ is True
+    assert db.Todo.__chrononaut_disable_indices__ == ['pub_date']
     assert db.Todo.pub_date.index is True
     assert db.Todo.__history_mapper__.columns.pub_date.index is None
 

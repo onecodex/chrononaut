@@ -85,7 +85,7 @@ def generate_test_models(db):
         __tablename__ = 'todos'
         __chrononaut_hidden__ = ['done']
         __chrononaut_untracked__ = ['starred']
-        __chrononaut_disable_indices__ = True
+        __chrononaut_disable_indices__ = ['pub_date']
         id = db.Column('id', db.Integer, primary_key=True)  # FIXME: `todo_id` fails as a col name
         title = db.Column(db.String(60))
         text = db.Column(db.Text)

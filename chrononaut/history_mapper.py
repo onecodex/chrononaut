@@ -59,6 +59,7 @@ def history_mapper(local_mapper):
     # we don't create copies of these columns on the version table b/c we don't save them anyways
     untracked_cols = set(getattr(cls, '__chrononaut_untracked__', []))
     hidden_cols = set(getattr(cls, '__chrononaut_hidden__', []))
+    noindex_cols = set(getattr(cls, '__chrononaut_disable_indices__', []))
 
     properties = util.OrderedDict()
     if not super_mapper or local_mapper.local_table is not super_mapper.local_table:
@@ -75,7 +76,7 @@ def history_mapper(local_mapper):
             col = _col_copy(column)
 
             # disable user-specified column indices on history tables, if indicated
-            if col.index is True and getattr(cls, '__chrononaut_disable_indices__', False):
+            if col.index is True and column.key in noindex_cols:
                 col.index = None
 
             if super_mapper and col_references_table(column, super_mapper.local_table):
