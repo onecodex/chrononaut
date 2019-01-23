@@ -105,6 +105,13 @@ def generate_test_models(db):
             self.starred = False
             self.pub_date = datetime.utcnow()
 
+        @sqlalchemy.orm.validates('todo_type')
+        def validate_todo_type(self, k, v):
+            if v is 'invalid_type':
+                raise Exception('todo_type could not be validated')
+            else:
+                return v
+
     class SpecialTodo(Todo, chrononaut.Versioned):
         # Joined table inheritance example
         __tablename__ = "special_todo"
@@ -123,9 +130,17 @@ def generate_test_models(db):
     class Report(db.Model, chrononaut.Versioned):
         __tablename__ = 'report'
         __chrononaut_tablename__ = 'rep_history'
+        __chrononaut_copy_validators__ = True
         report_id = db.Column(db.Integer, primary_key=True)
         title = db.Column(db.String(60))
         text = db.Column(db.Text)
+
+        @sqlalchemy.orm.validates('title')
+        def validate_title(self, k, v):
+            if v is 'invalid_title':
+                raise Exception('title could not be validated')
+            else:
+                return v
 
     roles_users = db.Table('roles_users',
                            db.Column('user_id', db.Integer(), db.ForeignKey('appuser.id')),

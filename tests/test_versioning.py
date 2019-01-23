@@ -31,6 +31,44 @@ def test_versioned_todo(db, session):
     assert prior_todos[0].__class__.__name__ == 'TodoHistory'
 
 
+def test_validation_transfer(db, session):
+    assert db.Report.__chrononaut_copy_validators__ is True
+
+    report = db.Report()
+    report.title = 'valid title'
+    report.text = 'valid text'
+    session.add(report)
+    session.commit()
+
+    report.title = 'another valid title'
+    session.commit()
+
+    old_report = report.previous_version()
+
+    with pytest.raises(Exception) as e:
+        old_report.title = 'invalid_title'
+    assert 'could not be validated' in str(e.value)
+
+    todo = db.Todo('Task 0', 'Testing...')
+    assert todo.__class__ == db.Todo
+    session.add(todo)
+    session.commit()
+    assert todo.versions() == []
+
+    # Update the Task
+    todo.title = 'Task 0.1'
+    session.commit()
+
+    # will raise, validators enabled on primary table
+    with pytest.raises(Exception) as e:
+        todo.todo_type = 'invalid_type'
+    assert 'could not be validated' in str(e.value)
+
+    # won't raise, validators not transferred to history table
+    prior_todo = todo.previous_version()
+    prior_todo.todo_type = 'invalid_type'
+
+
 def test_delete_tracking(db, session):
     todo = db.SpecialTodo('Special 1', 'To be deleted')
     session.add(todo)

@@ -154,6 +154,13 @@ def history_mapper(local_mapper):
         polymorphic_identity=local_mapper.polymorphic_identity,
         properties=properties
     )
+
+    # strip validators from history tables unless explicitly told not to
+    if getattr(cls, '__chrononaut_copy_validators__', False):
+        m.validators = local_mapper.validators
+    else:
+        m.validators = util.immutabledict()
+
     cls.__history_mapper__ = m
 
     if not super_history_mapper:
