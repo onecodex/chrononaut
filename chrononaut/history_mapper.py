@@ -67,8 +67,8 @@ def history_mapper(local_mapper):
         version_meta = {"version_meta": True}
 
         for column in local_mapper.local_table.c:
-            if ('version_meta' in column.info or
-                    column.key in hidden_cols or
+            if ('version_meta' in column.info or  # noqa
+                    column.key in hidden_cols or  # noqa
                     column.key in untracked_cols):
                 continue
 

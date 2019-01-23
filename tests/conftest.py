@@ -19,7 +19,7 @@ def app(request):
         'SQLALCHEMY_DATABASE_URI',
         'postgres://postgres@localhost/chrononaut_test'
     )
-    app.config['SECRET_KEY'] = '+BU9wMx=xvD\YV'
+    app.config['SECRET_KEY'] = '+BU9wMx=xvD\\YV'
     app.config['LOGIN_DISABLED'] = False
     app.config['WTF_CSRF_ENABLED'] = False
     ctx = app.app_context()
