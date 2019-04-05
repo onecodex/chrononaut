@@ -20,7 +20,7 @@ from sqlalchemy.dialects import postgresql
 # We need to ignore a warning here, as Flask-SQLAlchemy causes problems in its
 # _should_set_tablename item run at init time
 # See: https://github.com/mitsuhiko/flask-sqlalchemy/issues/349
-from sqlalchemy.exc import SAWarning
+from sqlalchemy.exc import NoReferencedTableError, SAWarning
 import warnings
 warnings.simplefilter('ignore', SAWarning)
 
@@ -31,16 +31,19 @@ def raise_(ex):
 
 def col_references_table(col, table):
     for fk in col.foreign_keys:
-        if fk.references(table):
-            return True
+        try:
+            if fk.references(table):
+                return True
+        except NoReferencedTableError:
+            return False
     return False
 
 
 def history_mapper(local_mapper):
     cls = local_mapper.class_
 
-    for prop in local_mapper.iterate_properties:
-        getattr(cls, prop.key).impl.active_history = True
+    for prop in local_mapper._props:
+        local_mapper._props[prop].active_history = True
 
     super_mapper = local_mapper.inherits
     super_history_mapper = getattr(cls, '__history_mapper__', None)
@@ -134,10 +137,11 @@ def history_mapper(local_mapper):
 
         if table is not None:
             properties['changed'] = (
-                (table.c.changed, ) + tuple(super_history_mapper.attrs.changed.columns)
+                (table.c.changed, ) + tuple(super_history_mapper._props['changed'].columns)
             )
     else:
         bases = local_mapper.base_mapper.class_.__bases__
+
     versioned_cls = type.__new__(type, "%sHistory" % cls.__name__, bases, {})
 
     # Finally add @property's raising OmittedAttributeErrors for missing cols
