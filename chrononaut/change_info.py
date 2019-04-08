@@ -20,8 +20,10 @@ def _in_flask_context():
 
 
 class ChangeInfoMixin(object):
-    """A mixin that the :class:`Versioned` mixin inherits from and includes change info tracking features.
+    """A mixin that the :class:`Versioned` mixin inherits from and includes change info tracking
+    features.
     """
+
     @classmethod
     def _capture_change_info(cls):
         """Capture the change info for the new version. By default calls:
@@ -34,8 +36,8 @@ class ChangeInfoMixin(object):
         ``remote_addr``, and any keys from :meth:`_get_custom_change_info`)
         """
         change_info = {
-            'user_id': cls._fetch_current_user_id(),
-            'remote_addr': cls._fetch_remote_addr(),
+            "user_id": cls._fetch_current_user_id(),
+            "remote_addr": cls._fetch_remote_addr(),
         }
         extra_info = cls._get_custom_change_info()
         if extra_info:
@@ -52,6 +54,7 @@ class ChangeInfoMixin(object):
             return None
         try:
             from flask_login import current_user
+
             return current_user.email if current_user.is_authenticated else None
         except ImportError:
             return None
@@ -77,7 +80,7 @@ class ChangeInfoMixin(object):
 
         :return: A dictionary of additional ``change_info`` keys and values
         """
-        extra_info = current_app.config.get('CHRONONAUT_EXTRA_CHANGE_INFO_FUNC')
+        extra_info = current_app.config.get("CHRONONAUT_EXTRA_CHANGE_INFO_FUNC")
         if extra_info:
             return extra_info()
         return None
@@ -85,19 +88,23 @@ class ChangeInfoMixin(object):
 
 class RecordChanges(ChangeInfoMixin):
     """A mixin that records change information in a ``change_info`` JSON column and a ``changed``
-    timezone-aware datetime column. Creates change records in the same format as the :class:`Versioned`
-    mixin, but stores them directly on the model vs. in a separate history table.
+    timezone-aware datetime column. Creates change records in the same format as the
+    :class:`Versioned` mixin, but stores them directly on the model vs. in a separate history table.
     """
+
     __chrononaut_record_change_info__ = True
-    change_info = Column('change_info', postgresql.JSONB, default=None)
-    changed = Column('changed', DateTime(timezone=True), default=lambda: datetime.now(pytz.utc))
+    change_info = Column("change_info", postgresql.JSONB, default=None)
+    changed = Column("changed", DateTime(timezone=True), default=lambda: datetime.now(pytz.utc))
 
 
 def append_recorded_changes(obj, session):
-    if (session.app.config.get('CHRONONAUT_REQUIRE_EXTRA_CHANGE_INFO', False) is True and not
-            hasattr(g, '__version_extra_change_info__')):
-        msg = ('Strict tracking is enabled and no g.__version_extra_change_info__ was found. '
-               'Use the `extra_change_info` context manager before committing.')
+    if session.app.config.get(
+        "CHRONONAUT_REQUIRE_EXTRA_CHANGE_INFO", False
+    ) is True and not hasattr(g, "__version_extra_change_info__"):
+        msg = (
+            "Strict tracking is enabled and no g.__version_extra_change_info__ was found. "
+            "Use the `extra_change_info` context manager before committing."
+        )
         raise ChrononautException(msg)
 
     obj.change_info = fetch_change_info(obj)

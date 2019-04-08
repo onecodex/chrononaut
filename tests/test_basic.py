@@ -11,8 +11,10 @@ def test_unversioned_db_fixture(unversioned_db):
     """
     assert unversioned_db.__class__ == flask_sqlalchemy.SQLAlchemy
     assert unversioned_db.session.__class__ == sqlalchemy.orm.scoping.scoped_session
-    assert (unversioned_db.session.session_factory().__class__.__name__ ==  # noqa
-            flask_sqlalchemy.SignallingSession.__name__)
+    assert (
+        unversioned_db.session.session_factory().__class__.__name__
+        == flask_sqlalchemy.SignallingSession.__name__  # noqa
+    )
 
 
 def test_db_fixture(db):
@@ -20,14 +22,16 @@ def test_db_fixture(db):
     """
     assert db.__class__ == chrononaut.VersionedSQLAlchemy
     assert db.session.__class__ == sqlalchemy.orm.scoping.scoped_session
-    assert (db.session.session_factory().__class__.__name__ ==  # noqa
-            chrononaut.VersionedSignallingSession.__name__)
+    assert (
+        db.session.session_factory().__class__.__name__
+        == chrononaut.VersionedSignallingSession.__name__  # noqa
+    )
 
 
 def test_unversioned_todo(db):
     """Test unversioned class.
     """
-    todo = db.UnversionedTodo('Task 0', 'Testing...')
+    todo = db.UnversionedTodo("Task 0", "Testing...")
     assert todo.__class__ == db.UnversionedTodo
 
 
@@ -35,8 +39,19 @@ def test_table_names(db, session):
     """Check that all expected tables are being generated,
     including custom `__chrononaut_tablename__` settings
     """
-    assert (set(db.metadata.tables.keys()) ==  # noqa
-            {'report', 'rep_history', 'todos', 'todos_history', 'unversioned_todos',
-             'special_todo', 'special_todo_history',
-             'appuser', 'appuser_history', 'role', 'role_history', 'roles_users',
-             'change_log', 'change_log_history'})
+    assert set(db.metadata.tables.keys()) == {  # noqa
+        "report",
+        "rep_history",
+        "todos",
+        "todos_history",
+        "unversioned_todos",
+        "special_todo",
+        "special_todo_history",
+        "appuser",
+        "appuser_history",
+        "role",
+        "role_history",
+        "roles_users",
+        "change_log",
+        "change_log_history",
+    }

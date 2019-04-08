@@ -5,7 +5,7 @@ SQLAlchemy>=1.1.7
 pytz>=2017.2
 psycopg2-binary>=2.8.1
 
-# Testing & documentation requirements
+# Testing & documentation requirements (note these must be installable across all Tox environment)
 pytest==3.0.7
 coveralls==1.1
 pytest-cov==2.4.0

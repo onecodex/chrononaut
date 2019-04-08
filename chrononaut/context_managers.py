@@ -32,10 +32,10 @@ def extra_change_info(**kwargs):
         }
     """
     if _app_ctx_stack.top is None:
-        raise ChrononautException('Can only use `extra_change_info` in a Flask app context.')
-    setattr(g, '__version_extra_change_info__', kwargs)
+        raise ChrononautException("Can only use `extra_change_info` in a Flask app context.")
+    setattr(g, "__version_extra_change_info__", kwargs)
     yield
-    delattr(g, '__version_extra_change_info__')
+    delattr(g, "__version_extra_change_info__")
 
 
 @contextmanager
@@ -80,10 +80,10 @@ def append_change_info(obj, **kwargs):
     :func:`extra_change_info`.
     """
     if _app_ctx_stack.top is None:
-        raise ChrononautException('Can only use `append_change_info` in a Flask app context.')
+        raise ChrononautException("Can only use `append_change_info` in a Flask app context.")
 
-    if not hasattr(obj, 'versions'):
-        raise ChrononautException('Cannot append_change_info to an object that is not Versioned.')
+    if not hasattr(obj, "versions"):
+        raise ChrononautException("Cannot append_change_info to an object that is not Versioned.")
 
     obj.__CHRONONAUT_RECORDED_CHANGES__ = {}
     for key, val in kwargs.items():
