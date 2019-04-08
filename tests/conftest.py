@@ -108,7 +108,7 @@ def generate_test_models(db):
 
         @sqlalchemy.orm.validates('todo_type')
         def validate_todo_type(self, k, v):
-            if v is 'invalid_type':
+            if v == 'invalid_type':
                 raise Exception('todo_type could not be validated')
             else:
                 return v
@@ -138,7 +138,7 @@ def generate_test_models(db):
 
         @sqlalchemy.orm.validates('title')
         def validate_title(self, k, v):
-            if v is 'invalid_title':
+            if v == 'invalid_title':
                 raise Exception('title could not be validated')
             else:
                 return v
