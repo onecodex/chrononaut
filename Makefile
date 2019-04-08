@@ -5,6 +5,7 @@ test:
 lint:
 	flake8 --ignore E501 chrononaut/
 	flake8 --ignore E501 tests/
+	black --check -l 100 chrononaut/ tests/
 	@echo "Successfully linted all files."
 
 coverage:

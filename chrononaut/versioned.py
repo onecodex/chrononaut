@@ -45,12 +45,14 @@ class Versioned(ChangeInfoMixin):
     ``__chrononaut_hidden__`` field. This can be useful for sensitive values, e.g., passwords,
     which you do not want to retain indefinitely.
     """
+
     @declared_attr
     def __mapper_cls__(cls):
         def map_function(cls, *arg, **kw):
             mp = mapper(cls, *arg, **kw)
             history_mapper(mp)
             return mp
+
         return map_function
 
     def versions(self, before=None, after=None, return_query=False):
@@ -62,14 +64,14 @@ class Versioned(ChangeInfoMixin):
         :return: List of history models for the given object (or a query object).
         """
         # If the model has the RecordChanges mixin, only query the history table as needed
-        if hasattr(self, '__chrononaut_record_change_info__'):
+        if hasattr(self, "__chrononaut_record_change_info__"):
             if before is not None and self.changed > before:
                 return [] if not return_query else self.query.filter(False)
             if after is not None and self.changed < after:
                 return [] if not return_query else self.query.filter(False)
 
         # Get the primary keys for this table
-        prim_keys = [k.key for k in self.__history_mapper__.primary_key if k.key != 'version']
+        prim_keys = [k.key for k in self.__history_mapper__.primary_key if k.key != "version"]
 
         # Find all previous versions that have the same primary keys as myself
         query = self.__history_mapper__.class_.query.filter_by(
@@ -131,20 +133,21 @@ class Versioned(ChangeInfoMixin):
         :return: A dict of column names and ``(from, to)`` value tuples
         """
         to_model = to or self
-        untracked_cols = set(getattr(self, '__chrononaut_untracked__', []))
+        untracked_cols = set(getattr(self, "__chrononaut_untracked__", []))
 
         for k in self.__history_mapper__.primary_key:
-            if k.key == 'version':
+            if k.key == "version":
                 continue
             if getattr(from_model, k.key) != getattr(to_model, k.key):
-                raise ChrononautException('You can only diff models with the same primary keys.')
+                raise ChrononautException("You can only diff models with the same primary keys.")
 
         if not isinstance(from_model, self.__history_mapper__.class_):
-            raise ChrononautException('Cannot diff from a non-history model.')
+            raise ChrononautException("Cannot diff from a non-history model.")
 
         if to_model is not self and from_model.changed > to_model.changed:
-            raise ChrononautException('Diffs must be chronological. Your from_model '
-                                      'post-dates your to.')
+            raise ChrononautException(
+                "Diffs must be chronological. Your from_model " "post-dates your to."
+            )
 
         # TODO: Refactor this and `create_version` so some of the object mapper
         #       iteration is not duplicated twice
@@ -152,7 +155,7 @@ class Versioned(ChangeInfoMixin):
         obj_mapper = object_mapper(from_model)
         for om in obj_mapper.iterate_to_root():
             for obj_col in om.local_table.c:
-                if 'version_meta' in obj_col.info or obj_col.key in untracked_cols:
+                if "version_meta" in obj_col.info or obj_col.key in untracked_cols:
                     continue
                 try:
                     prop = obj_mapper.get_property_by_column(obj_col)
@@ -171,8 +174,8 @@ class Versioned(ChangeInfoMixin):
         if include_hidden and isinstance(to_model, self.__class__):
             from_versions = self.versions(after=from_model.changed)
             for from_version in from_versions:
-                if 'hidden_cols_changed' in from_version.change_info:
-                    for hidden_col in from_version.change_info['hidden_cols_changed']:
+                if "hidden_cols_changed" in from_version.change_info:
+                    for hidden_col in from_version.change_info["hidden_cols_changed"]:
                         diff[hidden_col] = (None, getattr(to_model, hidden_col))
                     break
 

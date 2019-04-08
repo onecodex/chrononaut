@@ -16,10 +16,10 @@ def fetch_change_info(obj):
         return change_info
 
     extra_change_info = {}
-    extra_change_info.update(getattr(g, '__version_extra_change_info__', {}))
-    extra_change_info.update(getattr(obj, '__CHRONONAUT_RECORDED_CHANGES__', {}))
+    extra_change_info.update(getattr(g, "__version_extra_change_info__", {}))
+    extra_change_info.update(getattr(obj, "__CHRONONAUT_RECORDED_CHANGES__", {}))
     if extra_change_info:
-        change_info['extra'] = extra_change_info
+        change_info["extra"] = extra_change_info
 
     return change_info
 
@@ -33,8 +33,8 @@ def create_version(obj, session, deleted=False):
 
     attr = {}
 
-    hidden_cols = set(getattr(obj, '__chrononaut_hidden__', []))
-    untracked_cols = set(getattr(obj, '__chrononaut_untracked__', []))
+    hidden_cols = set(getattr(obj, "__chrononaut_hidden__", []))
+    untracked_cols = set(getattr(obj, "__chrononaut_untracked__", []))
 
     changed_cols = set()
 
@@ -43,7 +43,7 @@ def create_version(obj, session, deleted=False):
             continue
 
         for obj_col in om.local_table.c:
-            if 'version_meta' in obj_col.info or obj_col.key in untracked_cols:
+            if "version_meta" in obj_col.info or obj_col.key in untracked_cols:
                 continue
 
             # get the value of the attribute based on the MapperProperty related to the
@@ -78,7 +78,7 @@ def create_version(obj, session, deleted=False):
         # not changed, but we have relationships. check those too
         no_init = attributes.PASSIVE_NO_INITIALIZE
         for prop in obj_mapper.iterate_properties:
-            if hasattr(prop, 'name'):
+            if hasattr(prop, "name"):
                 # in case it's a proxy property (synonym), this is correct column name
                 prop_name = prop.name
             else:
@@ -97,18 +97,21 @@ def create_version(obj, session, deleted=False):
     if len(changed_cols) == 0 and not deleted:
         return
 
-    if (session.app.config.get('CHRONONAUT_REQUIRE_EXTRA_CHANGE_INFO', False) is True and not
-            hasattr(g, '__version_extra_change_info__')):
-        msg = ('Strict tracking is enabled and no g.__version_extra_change_info__ was found. '
-               'Use the `extra_change_info` context manager before committing.')
+    if session.app.config.get(
+        "CHRONONAUT_REQUIRE_EXTRA_CHANGE_INFO", False
+    ) is True and not hasattr(g, "__version_extra_change_info__"):
+        msg = (
+            "Strict tracking is enabled and no g.__version_extra_change_info__ was found. "
+            "Use the `extra_change_info` context manager before committing."
+        )
         raise ChrononautException(msg)
 
-    attr['version'] = obj.version or 0
+    attr["version"] = obj.version or 0
     change_info = fetch_change_info(obj)
 
     if len(changed_cols.intersection(hidden_cols)) > 0:
-        change_info['hidden_cols_changed'] = list(changed_cols.intersection(hidden_cols))
-    attr['change_info'] = change_info
+        change_info["hidden_cols_changed"] = list(changed_cols.intersection(hidden_cols))
+    attr["change_info"] = change_info
 
     # update the history object (except any hidden cols)
     hist = history_cls()
@@ -119,4 +122,4 @@ def create_version(obj, session, deleted=False):
             setattr(hist, key, value)
 
     session.add(hist)
-    obj.version = attr['version'] + 1
+    obj.version = attr["version"] + 1
