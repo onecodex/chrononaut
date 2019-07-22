@@ -7,7 +7,7 @@ psycopg2-binary>=2.8.1
 
 # Testing & documentation requirements (note these must be installable across all Tox environment)
 pytest==3.0.7
-coveralls==1.1
+codecov
 pytest-cov==2.4.0
 Flask-Security-Fork==2.0.1
 sphinx==1.5.5
