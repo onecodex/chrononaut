@@ -95,23 +95,3 @@ jobs:
           . venv/bin/activate
           make coverage
           codecov
-
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Set up Python
-        uses: actions/setup-python@v1
-        with:
-          python-version: 3.7
-      - name: Install dependencies in a venv
-        if: steps.cache-pip.outputs.cache-hit != 'true'
-        run: |
-          python3 -m venv venv
-          . venv/bin/activate
-          pip install -q -U pip
-          pip install flake8 black
-      - name: Lint
-        run: |
-          . venv/bin/activate
-          make lint
