@@ -32,7 +32,7 @@ class Versioned(ChangeInfoMixin):
             "user_id": "A unique user ID (string) or None",
             "remote_addr": "The user IP (string) or None"
         }
-    
+
     An additional ``extra_info`` column stores extra metadata associated with a version, like
     hidden columns that changed or manually appended data, i.e. ``rationale``::
 
@@ -98,7 +98,7 @@ class Versioned(ChangeInfoMixin):
         if return_query:
             return query
         else:
-            return [chrononaut_snapshot_to_model(self, m) for m in  query.all()]
+            return [chrononaut_snapshot_to_model(self, m) for m in query.all()]
 
     def version_at(self, at, return_snapshot=False):
         """Fetch the history model at a specific time (or None)
