@@ -4,6 +4,7 @@ Flask-SQLAlchemy>=2.2
 SQLAlchemy>=1.1.7
 pytz>=2017.2
 psycopg2-binary>=2.8.1
+alembic>=1.5.1
 
 # Testing & documentation requirements (note these must be installable across all Tox environment)
 pytest==3.0.7
