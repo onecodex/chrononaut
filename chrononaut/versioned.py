@@ -19,8 +19,8 @@ class Versioned(ChangeInfoMixin):
             email = db.Column(db.String(255))
             ...
 
-    The above will then automatically track updates to the ``User`` model and create an
-    ``appuser_history`` table for tracking prior versions of each record. By default,
+    The above will then automatically track updates to the ``User`` model and save
+    value snapshots of prior versions of each record to the ``activity`` table. By default,
     *all* columns are tracked. By default, change information includes a ``user_id``
     and ``remote_addr``, which are set to automatically populate from Flask-Login's
     ``current_user`` in the :meth:`_capture_user_info` method. Subclass :class:`Versioned`
@@ -30,17 +30,20 @@ class Versioned(ChangeInfoMixin):
 
         {
             "user_id": "A unique user ID (string) or None",
-            "remote_addr": "The user IP (string) or None",
-            "extra": {
-                ...  # Optional extra fields
-            },
+            "remote_addr": "The user IP (string) or None"
+        }
+    
+    An additional ``extra_info`` column stores extra metadata associated with a version, like
+    hidden columns that changed or manually appended data, i.e. ``rationale``::
+
+        {
+            "rationale": "..."
             "hidden_cols_changed": [
                 ...  # A list of any hidden fields changed in the version
             ]
         }
 
-
-    Note that the latter two keys will not exist if they would otherwise be empty. You may
+    Note that the latter column will be an empty dictionary by default. You may
     provide a list of column names that you do not want to track using the optional
     ``__chrononaut_untracked__`` field or you may provide a list of columns you'd like to
     "hide" (i.e., track updates to the columns but not their values) using the
@@ -63,7 +66,7 @@ class Versioned(ChangeInfoMixin):
         :param before: Return changes only _before_ the provided ``DateTime``.
         :param before: Return changes only _after_ the provided ``DateTime``.
         :param return_query: Return a SQLAlchemy query instead of a list of models.
-        :return: List of history models for the given object (or a query object).
+        :return: List of HistorySnapshot models for the given object (or a query object).
         """
         # If the model has the RecordChanges mixin, only query the history table as needed
         if hasattr(self, "__chrononaut_record_change_info__"):
@@ -95,7 +98,7 @@ class Versioned(ChangeInfoMixin):
         if return_query:
             return query
         else:
-            return query.all()
+            return [chrononaut_snapshot_to_model(self, m) for m in  query.all()]
 
     def version_at(self, at, return_snapshot=False):
         """Fetch the history model at a specific time (or None)
@@ -182,8 +185,10 @@ class Versioned(ChangeInfoMixin):
         # model *since* the from_timestamp *until* the to_timestamp
         # and see if `extra_info` includes hidden columns.
         if include_hidden:
-            between_versions = self.versions(after=from_timestamp, before=to_timestamp)
-            for version in between_versions:
+            between_versions = self.versions(
+                after=from_timestamp, before=to_timestamp, return_query=True
+            )
+            for version in between_versions.all():
                 if "hidden_cols_changed" in version.extra_info:
                     for hidden_col in version.extra_info["hidden_cols_changed"]:
                         diff[hidden_col] = (None, to_dict[hidden_col])

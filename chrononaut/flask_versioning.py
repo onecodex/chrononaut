@@ -112,7 +112,13 @@ def chrononaut_snapshot_to_model(model, activity_obj):
     }
 
     return HistorySnapshot(
-        data, activity_obj.table_name, activity_obj.changed, untracked_cols, hidden_cols
+        data, 
+        activity_obj.table_name, 
+        activity_obj.changed, 
+        activity_obj.user_info, 
+        activity_obj.extra_info, 
+        untracked_cols, 
+        hidden_cols
     )
 
 

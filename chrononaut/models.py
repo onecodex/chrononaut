@@ -22,10 +22,12 @@ def activity_factory(Base, schema=None):
 class HistorySnapshot(object):
     __initialized__ = False
 
-    def __init__(self, data, table_name, changed, untracked=[], hidden=[]):
+    def __init__(self, data, table_name, changed, user_info, extra_info, untracked=[], hidden=[]):
         self.data = data
         self.table_name = table_name
         self.changed = changed
+        self.user_info = user_info
+        self.extra_info = extra_info
         self.untracked = untracked
         self.hidden = hidden
         self.__initialized__ = True

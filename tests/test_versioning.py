@@ -29,7 +29,7 @@ def test_versioned_todo(db, session):
     assert prior_todos[0].version == 0  # 0-based indexing
     assert prior_todos[1].version == 1
     assert prior_title == "Task 0"
-    assert prior_todos[0].__class__.__name__ == "ActivityBase"
+    assert prior_todos[0].__class__.__name__ == "HistorySnapshot"
 
 
 def test_previous_version_not_modifiable(db, session):
