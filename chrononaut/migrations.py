@@ -43,7 +43,7 @@ class MigrateToHistoryTableOp(MigrateOperation):
 
 @Operations.implementation_for(MigrateFromHistoryTableOp)
 def migrate_from_history_table(operations, operation):
-    activity_table = "activity" if not operation.schema else f"{operation.schema}.activity"
+    activity_table = "activity" if not operation.schema else operation.schema + ".activity"
     table_name = (
         operation.table_name.replace("_history", "") 
         if operation.table_name.endswith("_history")
