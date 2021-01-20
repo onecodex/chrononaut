@@ -13,3 +13,4 @@ Flask-Security-Fork==2.0.1
 sphinx==1.5.5
 sphinx-autobuild==0.6.0
 Flask-Sphinx-Themes==1.0.1
+bcrypt==3.2.0

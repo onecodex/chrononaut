@@ -6,6 +6,10 @@ class ChrononautException(Exception):
     pass
 
 
+class ChrononautRelationshipError(ChrononautException, AttributeError):
+    pass
+
+
 class UntrackedAttributeError(ChrononautException, AttributeError):
     pass
 

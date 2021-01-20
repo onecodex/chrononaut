@@ -25,24 +25,19 @@ class ChangeInfoMixin(object):
     """
 
     @classmethod
-    def _capture_change_info(cls):
-        """Capture the change info for the new version. By default calls:
+    def _capture_user_info(cls):
+        """Capture the user info for the new version. By default calls:
 
         (1) :meth:`_fetch_current_user_id` which should return a string or None; and
         (2) :meth:`_fetch_remote_addr` which should return an IP address string or None;
-        (3) :meth:`_get_custom_change_info` which should return a 1-depth dict of additional keys.
 
-        These 3 methods generate a ``change_info`` and with 2+ top-level keys (``user_id``,
-        ``remote_addr``, and any keys from :meth:`_get_custom_change_info`)
+        These 2 methods generate a ``user_info`` with 2 top-level keys (``user_id``,
+        ``remote_addr``)
         """
-        change_info = {
+        return {
             "user_id": cls._fetch_current_user_id(),
             "remote_addr": cls._fetch_remote_addr(),
         }
-        extra_info = cls._get_custom_change_info()
-        if extra_info:
-            change_info.update(extra_info)
-        return change_info
 
     @classmethod
     def _fetch_current_user_id(cls):
@@ -78,12 +73,12 @@ class ChangeInfoMixin(object):
         If not defined, returns no additional change info. Note that :class:`Versioned`
         may be subclassed to further refine how custom change info is generated and propagated.
 
-        :return: A dictionary of additional ``change_info`` keys and values
+        :return: A dictionary of additional ``change_info`` keys and values or an empty dict
         """
         extra_info = current_app.config.get("CHRONONAUT_EXTRA_CHANGE_INFO_FUNC")
         if extra_info:
             return extra_info()
-        return None
+        return {}
 
 
 class RecordChanges(ChangeInfoMixin):
@@ -107,7 +102,13 @@ def append_recorded_changes(obj, session):
         )
         raise ChrononautException(msg)
 
-    obj.change_info = fetch_change_info(obj)
+    # backwards compatibility workaround: generate a {'user_id', 'remote_addr', 'extra'} structure
+    user_info, extra_info = fetch_change_info(obj)
+    change_info = user_info
+    if extra_info:
+        change_info["extra"] = extra_info
+
+    obj.change_info = change_info
     obj.changed = datetime.now(pytz.utc)
 
 

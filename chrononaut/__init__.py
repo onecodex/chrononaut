@@ -24,19 +24,19 @@ from chrononaut.context_managers import append_change_info, extra_change_info, r
 from chrononaut.exceptions import ChrononautException
 from chrononaut.flask_versioning import create_version
 from chrononaut.versioned import Versioned
+from chrononaut.models import activity_factory
 
 
 def versioned_objects(items):
     for obj in items:
-        if hasattr(obj, "__history_mapper__"):
+        if hasattr(obj, "version"):
             yield obj
 
 
 def versioned_session(session):
     @event.listens_for(session, "before_flush")
     def before_flush(session, flush_context, instances):
-        """A listener that handles state changes for objects with Chrononaut mixins.
-        """
+        """A listener that handles state changes for objects with Chrononaut mixins."""
         for obj in session.new:
             if hasattr(obj, "__chrononaut_record_change_info__"):
                 append_recorded_changes(obj, session)
@@ -44,13 +44,13 @@ def versioned_session(session):
                 increment_version_on_insert(obj)
 
         for obj in session.dirty:
-            if hasattr(obj, "__history_mapper__"):
+            if hasattr(obj, "version"):
                 create_version(obj, session)
             if hasattr(obj, "__chrononaut_record_change_info__"):
                 append_recorded_changes(obj, session)
 
         for obj in session.deleted:
-            if hasattr(obj, "__history_mapper__"):
+            if hasattr(obj, "version"):
                 create_version(obj, session, deleted=True)
 
 
@@ -89,8 +89,14 @@ class VersionedSQLAlchemy(SQLAlchemy):
 
     At its core, the :class:`VersionedSQLAlchemy` class simply ensures that database ``session``
     objects properly listen to events and create version records for models with the
-    :class:`Versioned` mixin.
+    :class:`Versioned` mixin. It also introduces the `activity` table which holds the data
+    snapshots of the edited entries.
+    It can be accessed via `metadata._activity_cls`.
     """
+
+    def __init__(self, *args, **kwargs):
+        super(VersionedSQLAlchemy, self).__init__(*args, **kwargs)
+        self.metadata._activity_cls = activity_factory(self.Model)
 
     def create_session(self, options):
         return sqlalchemy.orm.sessionmaker(class_=VersionedSignallingSession, db=self, **options)

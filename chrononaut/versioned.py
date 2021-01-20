@@ -1,10 +1,12 @@
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.orm import mapper, object_mapper
-from sqlalchemy.orm.exc import UnmappedColumnError
 
 from chrononaut.change_info import ChangeInfoMixin
 from chrononaut.exceptions import ChrononautException
-from chrononaut.history_mapper import history_mapper
+from chrononaut.history_mapper import extend_mapper
+from chrononaut.flask_versioning import model_to_chrononaut_snapshot, chrononaut_snapshot_to_model
+from datetime import datetime
+import pytz
 
 
 class Versioned(ChangeInfoMixin):
@@ -21,9 +23,9 @@ class Versioned(ChangeInfoMixin):
     ``appuser_history`` table for tracking prior versions of each record. By default,
     *all* columns are tracked. By default, change information includes a ``user_id``
     and ``remote_addr``, which are set to automatically populate from Flask-Login's
-    ``current_user`` in the :meth:`_capture_change_info` method. Subclass :class:`Versioned`
-    and override a combination of :meth:`_capture_change_info`, :meth:`_fetch_current_user_id`,
-    and :meth:`_get_custom_change_info`. This ``change_info`` is stored in a JSON column in your
+    ``current_user`` in the :meth:`_capture_user_info` method. Subclass :class:`Versioned`
+    and override a combination of :meth:`_capture_user_info`, :meth:`_fetch_current_user_id`,
+    and :meth:`_get_custom_change_info`. This ``user_info`` is stored in a JSON column in your
     application's database and has the following rough layout::
 
         {
@@ -50,7 +52,7 @@ class Versioned(ChangeInfoMixin):
     def __mapper_cls__(cls):
         def map_function(cls, *arg, **kw):
             mp = mapper(cls, *arg, **kw)
-            history_mapper(mp)
+            extend_mapper(mp)
             return mp
 
         return map_function
@@ -70,40 +72,50 @@ class Versioned(ChangeInfoMixin):
             if after is not None and self.changed < after:
                 return [] if not return_query else self.query.filter(False)
 
-        # Get the primary keys for this table
-        prim_keys = [k.key for k in self.__history_mapper__.primary_key if k.key != "version"]
+        activity = self.metadata._activity_cls
+        mapper = object_mapper(self)
 
-        # Find all previous versions that have the same primary keys as myself
-        query = self.__history_mapper__.class_.query.filter_by(
-            **{k: getattr(self, k) for k in prim_keys}
-        )
+        # Get the primary keys for this table
+        prim_keys = [k.key for k in mapper.primary_key if k.key != "version"]
+
+        # Find all previous versions that have the same primary keys and table name as myself
+        query = activity.query.filter(
+            *[activity.data[k].astext.__eq__(str(getattr(self, k))) for k in prim_keys]
+        ).filter(activity.table_name.__eq__(mapper.local_table.name))
 
         # Filter additionally by date as needed
         if before is not None:
-            query = query.filter(self.__history_mapper__.class_.changed <= before)
+            query = query.filter(activity.changed <= before)
         if after is not None:
-            query = query.filter(self.__history_mapper__.class_.changed >= after)
+            query = query.filter(activity.changed >= after)
 
         # Order by the version
-        query = query.order_by(self.__history_mapper__.class_.version)
+        query = query.order_by(activity.version)
 
         if return_query:
             return query
         else:
             return query.all()
 
-    def version_at(self, at):
+    def version_at(self, at, return_snapshot=False):
         """Fetch the history model at a specific time (or None)
 
         :param at: The DateTime at which to find the history record.
-        :return: A history model at the given point in time or the model itself if that is current.
+        :param return_snapshot: Return just the object snapshot dict instead of the model.
+        :return: The HistorySnapshot model representing the model at the given point in time
+        or the model itself if that is current.
         """
         query = self.versions(after=at, return_query=True)
         history_model = query.first()
+
         if history_model is None:
-            return self
+            return self if not return_snapshot else model_to_chrononaut_snapshot(self)[0]
         else:
-            return history_model
+            return (
+                history_model.data
+                if return_snapshot
+                else chrononaut_snapshot_to_model(self, history_model)
+            )
 
     def has_changed_since(self, since):
         """Check if there are any changes since a given time.
@@ -111,72 +123,70 @@ class Versioned(ChangeInfoMixin):
         :param since: The DateTime from which to find any history records
         :return: ``True`` if there have been any changes. ``False`` if not.
         """
-        return self.version_at(at=since) is not self
+        # TODO: this is ambiguous, what if there were 2 changes which cancel each other out?
+        return not len(self.diff(from_timestamp=since)) == 0
 
     def previous_version(self):
         """Fetch the previous version of this model (or None)
 
-        :return: A history model, or ``None`` if no history exists
+        :return: The HistorySnapshot model with attributes set to the previous state,
+        or ``None`` if no history exists.
         """
         query = self.versions(return_query=True)
+        activity = self.metadata._activity_cls
 
         # order_by(None) resets order_by() called in versions()
-        query = query.order_by(None).order_by(self.__history_mapper__.class_.version.desc())
-        return query.first()
+        query = query.order_by(None).order_by(activity.version.desc())
+        history_model = query.first()
+        return chrononaut_snapshot_to_model(self, history_model) if history_model else None
 
-    def diff(self, from_model, to=None, include_hidden=False):
-        """Enumerate the changes from a prior history model to a later history model or the current model's
-        state (if ``to`` is ``None``).
+    def diff(self, from_timestamp, to_timestamp=None, include_hidden=False):
+        """Enumerate the changes from a prior model state (at ``from_timestamp``) to a later
+        model state or the current model's state (if ``to_timestamp`` is ``None``).
 
-        :param from_model: A history model to diff from.
-        :param to: A history model or ``None``.
+        :param from_timestamp: A point in time for the model to diff from.
+        :param to_timestamp: A point in time to diff to or ``None`` for current version.
         :return: A dict of column names and ``(from, to)`` value tuples
         """
-        to_model = to or self
-        untracked_cols = set(getattr(self, "__chrononaut_untracked__", []))
+        if to_timestamp is None:
+            to_timestamp = datetime.now(pytz.utc)
 
-        for k in self.__history_mapper__.primary_key:
-            if k.key == "version":
-                continue
-            if getattr(from_model, k.key) != getattr(to_model, k.key):
-                raise ChrononautException("You can only diff models with the same primary keys.")
+        if not isinstance(from_timestamp, datetime):
+            raise ChrononautException("The diff method takes datetime as its argument.")
 
-        if not isinstance(from_model, self.__history_mapper__.class_):
-            raise ChrononautException("Cannot diff from a non-history model.")
-
-        if to_model is not self and from_model.changed > to_model.changed:
+        if to_timestamp < from_timestamp:
             raise ChrononautException(
-                "Diffs must be chronological. Your from_model " "post-dates your to."
+                "Diffs must be chronological. Your from_model post-dates your to."
             )
 
-        # TODO: Refactor this and `create_version` so some of the object mapper
-        #       iteration is not duplicated twice
-        diff = {}
-        obj_mapper = object_mapper(from_model)
-        for om in obj_mapper.iterate_to_root():
-            for obj_col in om.local_table.c:
-                if "version_meta" in obj_col.info or obj_col.key in untracked_cols:
-                    continue
-                try:
-                    prop = obj_mapper.get_property_by_column(obj_col)
-                except UnmappedColumnError:
-                    continue
+        from_dict = self.version_at(from_timestamp, return_snapshot=True)
+        to_dict = self.version_at(to_timestamp, return_snapshot=True)
 
-                # First check the history model's columns
-                from_val = getattr(from_model, prop.key)
-                to_val = getattr(to_model, prop.key)
-                if from_val != to_val:
-                    diff[prop.key] = (from_val, to_val)
+        hidden_cols = set(getattr(self, "__chrononaut_hidden__", []))
+        all_keys = set(from_dict.keys())
+        all_keys.update(to_dict.keys())
+        all_keys = all_keys.difference(hidden_cols)
+
+        diff = {}
+        for k in all_keys:
+            if k in from_dict and k not in to_dict:
+                diff[k] = (from_dict[k], None)
+            elif k not in from_dict and k in to_dict:
+                diff[k] = (None, from_dict[k])
+            else:
+                # it's in both
+                if from_dict[k] != to_dict[k]:
+                    diff[k] = (from_dict[k], to_dict[k])
 
         # If `include_hidden` we need to enumerate through every
-        # model *since* the from_model and see if `change_info` includes
-        # hidden columns. We only need to do this for non-history instances.
-        if include_hidden and isinstance(to_model, self.__class__):
-            from_versions = self.versions(after=from_model.changed)
-            for from_version in from_versions:
-                if "hidden_cols_changed" in from_version.change_info:
-                    for hidden_col in from_version.change_info["hidden_cols_changed"]:
-                        diff[hidden_col] = (None, getattr(to_model, hidden_col))
+        # model *since* the from_timestamp *until* the to_timestamp
+        # and see if `extra_info` includes hidden columns.
+        if include_hidden:
+            between_versions = self.versions(after=from_timestamp, before=to_timestamp)
+            for version in between_versions:
+                if "hidden_cols_changed" in version.extra_info:
+                    for hidden_col in version.extra_info["hidden_cols_changed"]:
+                        diff[hidden_col] = (None, to_dict[hidden_col])
                     break
 
         return diff

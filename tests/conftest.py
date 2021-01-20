@@ -5,22 +5,29 @@ import flask
 import flask_security
 import flask_sqlalchemy
 import sqlalchemy
+import random
+import string
 
 import chrononaut
 
 import pytest
 
 
-@pytest.yield_fixture(scope="session")
+@pytest.fixture(scope="session")
 def app(request):
     app = flask.Flask(__name__)
     app.config["TESTING"] = True
     app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
-        "SQLALCHEMY_DATABASE_URI", "postgres://postgres@localhost/chrononaut_test"
+        "SQLALCHEMY_DATABASE_URI", "postgresql://postgres@localhost/chrononaut_test"
     )
     app.config["SECRET_KEY"] = "+BU9wMx=xvD\\YV"
     app.config["LOGIN_DISABLED"] = False
     app.config["WTF_CSRF_ENABLED"] = False
+    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    app.config["SECURITY_PASSWORD_SALT"] = "".join(
+        random.choice(string.ascii_uppercase + string.ascii_lowercase + string.digits)
+        for _ in range(8)
+    )
     ctx = app.app_context()
     ctx.push()
 
@@ -29,18 +36,16 @@ def app(request):
     ctx.pop()
 
 
-@pytest.yield_fixture(scope="session")
+@pytest.fixture(scope="session")
 def unversioned_db(app, request):
-    """An unversioned db fixture.
-    """
+    """An unversioned db fixture."""
     db = flask_sqlalchemy.SQLAlchemy(app)
     yield db
 
 
-@pytest.yield_fixture(scope="session")
+@pytest.fixture(scope="session")
 def db(app, request):
-    """A versioned db fixture.
-    """
+    """A versioned db fixture."""
     db = chrononaut.VersionedSQLAlchemy(app)
     models = generate_test_models(db)
     for model in models:
@@ -50,14 +55,14 @@ def db(app, request):
     db.drop_all()
 
 
-@pytest.yield_fixture(scope="function")
+@pytest.fixture(scope="function")
 def strict_session(app, request):
     app.config["CHRONONAUT_REQUIRE_EXTRA_CHANGE_INFO"] = True
     yield
     app.config["CHRONONAUT_REQUIRE_EXTRA_CHANGE_INFO"] = False
 
 
-@pytest.yield_fixture(scope="function")
+@pytest.fixture(scope="function")
 def extra_change_info(app, request):
     app.config["CHRONONAUT_EXTRA_CHANGE_INFO_FUNC"] = lambda: {"extra_field": True}
     yield
@@ -91,7 +96,7 @@ def generate_test_models(db):
         todo_type = db.Column(db.String(16))
         done = db.Column(db.Boolean)
         starred = db.Column(db.Boolean)
-        pub_date = db.Column(db.DateTime, index=True)
+        pub_date = db.Column(db.DateTime(timezone=True), index=True)
 
         __mapper_args__ = {"polymorphic_identity": "basic", "polymorphic_on": todo_type}
 
@@ -152,7 +157,7 @@ def generate_test_models(db):
         email = db.Column(db.String(255), unique=True)
         password = db.Column(db.String(255))
         active = db.Column(db.Boolean())
-        confirmed_at = db.Column(db.DateTime())
+        confirmed_at = db.Column(db.DateTime(timezone=True))
         primary_role_id = db.Column(db.Integer, db.ForeignKey("role.id"))
         primary_role = db.relationship("Role")
         roles = db.relationship(
@@ -166,7 +171,7 @@ def generate_test_models(db):
     return Todo, UnversionedTodo, SpecialTodo, Report, User, Role, ChangeLog
 
 
-@pytest.yield_fixture(scope="function")
+@pytest.fixture(scope="function")
 def session(db, request):
     """Creates a new database session for a test."""
     connection = db.engine.connect()
@@ -225,7 +230,7 @@ def anonymous_user(session, db, app_client):
         yield flask_security.current_user
 
 
-@pytest.yield_fixture(scope="function")
+@pytest.fixture(scope="function")
 def logged_in_user(session, db, app_client):
     user = db.User.query.first()
     with app_client:

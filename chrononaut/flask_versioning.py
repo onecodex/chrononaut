@@ -2,46 +2,46 @@
 """
 from flask import g
 from flask.globals import _app_ctx_stack
+from datetime import datetime
+import pytz
 
 from sqlalchemy.orm import attributes, object_mapper
 from sqlalchemy.orm.exc import UnmappedColumnError
 from sqlalchemy.orm.properties import RelationshipProperty
 
 from chrononaut.exceptions import ChrononautException
+from chrononaut.models import HistorySnapshot
 
 
 def fetch_change_info(obj):
-    change_info = obj._capture_change_info()
+    user_info = obj._capture_user_info()
     if _app_ctx_stack.top is None:
-        return change_info
+        return user_info, {}
 
-    extra_change_info = {}
+    extra_change_info = obj._get_custom_change_info()
     extra_change_info.update(getattr(g, "__version_extra_change_info__", {}))
     extra_change_info.update(getattr(obj, "__CHRONONAUT_RECORDED_CHANGES__", {}))
-    if extra_change_info:
-        change_info["extra"] = extra_change_info
 
-    return change_info
+    return user_info, extra_change_info
 
 
-def create_version(obj, session, deleted=False):
-    obj_mapper = object_mapper(obj)
-    history_mapper = obj.__history_mapper__
-    history_cls = history_mapper.class_
+def model_to_chrononaut_snapshot(obj, obj_mapper=None):
+    """Creates a Chrononaut snapshot (a dict) containing the object state
+    and a list of dirty columns.
 
+    :param obj: The object to convert.
+    :param obj_mapper: (Optional) use this mapper, otherwise one will be inferred from obj.
+    :return The object state snapshot dict and a set of dirty columns.
+    """
+    if obj_mapper is None:
+        obj_mapper = object_mapper(obj)
     obj_state = attributes.instance_state(obj)
-
-    attr = {}
-
-    hidden_cols = set(getattr(obj, "__chrononaut_hidden__", []))
     untracked_cols = set(getattr(obj, "__chrononaut_untracked__", []))
 
-    changed_cols = set()
+    attr = {}
+    dirty_cols = set()
 
-    for om, hm in zip(obj_mapper.iterate_to_root(), history_mapper.iterate_to_root()):
-        if hm.single:
-            continue
-
+    for om in obj_mapper.iterate_to_root():
         for obj_col in om.local_table.c:
             if "version_meta" in obj_col.info or obj_col.key in untracked_cols:
                 continue
@@ -66,13 +66,59 @@ def create_version(obj, session, deleted=False):
 
             if d:
                 attr[prop.key] = d[0]
-                changed_cols.add(prop.key)
+                dirty_cols.add(prop.key)
             elif u:
                 attr[prop.key] = u[0]
             elif a:
                 # if the attribute had no value.
                 attr[prop.key] = a[0]
-                changed_cols.add(prop.key)
+                dirty_cols.add(prop.key)
+
+            if prop.key in attr and isinstance(attr[prop.key], datetime):
+                attr[prop.key] = attr[prop.key].isoformat()
+
+    return attr, dirty_cols
+
+
+def chrononaut_snapshot_to_model(model, activity_obj):
+    """Creates a HistorySnapshot model based on a Chrononaut ActivityBase class.
+
+    :param model: The base model the snapshot comes from.
+    :param activity_obj: The Activity object containing the data to create a HistorySnapshot model.
+    :return The HistorySnapshot model.
+    """
+
+    def _get_column_type(col):
+        for om in model.__mapper__.iterate_to_root():
+            if col in om.columns:
+                return om.columns[col].type
+        return None
+
+    if not activity_obj.metadata or not isinstance(
+        activity_obj, activity_obj.metadata._activity_cls
+    ):
+        raise ChrononautException("Can only recreate model based on Activity object")
+
+    untracked_cols = set(getattr(model, "__chrononaut_untracked__", []))
+    hidden_cols = set(getattr(model, "__chrononaut_hidden__", []))
+
+    data = {
+        k: (
+            datetime.fromisoformat(v)
+            if isinstance(v, str) and str(_get_column_type(k)) == "DATETIME"
+            else v
+        )
+        for k, v in activity_obj.data.items()
+    }
+
+    return HistorySnapshot(
+        data, activity_obj.table_name, activity_obj.changed, untracked_cols, hidden_cols
+    )
+
+
+def create_version(obj, session, deleted=False):
+    obj_mapper = object_mapper(obj)
+    attrs, changed_cols = model_to_chrononaut_snapshot(obj, obj_mapper)
 
     if len(changed_cols) == 0:
         # not changed, but we have relationships. check those too
@@ -106,20 +152,25 @@ def create_version(obj, session, deleted=False):
         )
         raise ChrononautException(msg)
 
-    attr["version"] = obj.version or 0
-    change_info = fetch_change_info(obj)
+    hidden_cols = set(getattr(obj, "__chrononaut_hidden__", []))
+    user_info, extra_info = fetch_change_info(obj)
 
     if len(changed_cols.intersection(hidden_cols)) > 0:
-        change_info["hidden_cols_changed"] = list(changed_cols.intersection(hidden_cols))
-    attr["change_info"] = change_info
+        extra_info["hidden_cols_changed"] = list(changed_cols.intersection(hidden_cols))
 
-    # update the history object (except any hidden cols)
-    hist = history_cls()
-    for key, value in attr.items():
-        if key in hidden_cols:
-            pass
-        else:
-            setattr(hist, key, value)
+    # removing hidden cols from data
+    for key in hidden_cols:
+        del attrs[key]
 
-    session.add(hist)
-    obj.version = attr["version"] + 1
+    # create the history object (except any hidden cols)
+    activity = obj.metadata._activity_cls()
+
+    activity.table_name = obj_mapper.local_table.name
+    activity.data = attrs
+    activity.changed = datetime.now(pytz.utc)
+    activity.version = obj.version or 0
+    activity.user_info = user_info
+    activity.extra_info = extra_info
+
+    session.add(activity)
+    obj.version = activity.version + 1
