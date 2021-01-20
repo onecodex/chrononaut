@@ -32,7 +32,7 @@ class Versioned(ChangeInfoMixin):
             "user_id": "A unique user ID (string) or None",
             "remote_addr": "The user IP (string) or None"
         }
-    
+
     An additional ``extra_info`` column stores extra metadata associated with a version, like
     hidden columns that changed or manually appended data, i.e. ``rationale``::
 
@@ -50,6 +50,8 @@ class Versioned(ChangeInfoMixin):
     ``__chrononaut_hidden__`` field. This can be useful for sensitive values, e.g., passwords,
     which you do not want to retain indefinitely.
     """
+
+    __versioned__ = {}
 
     @declared_attr
     def __mapper_cls__(cls):
@@ -98,7 +100,7 @@ class Versioned(ChangeInfoMixin):
         if return_query:
             return query
         else:
-            return [chrononaut_snapshot_to_model(self, m) for m in  query.all()]
+            return [chrononaut_snapshot_to_model(self, m) for m in query.all()]
 
     def version_at(self, at, return_snapshot=False):
         """Fetch the history model at a specific time (or None)
@@ -175,7 +177,7 @@ class Versioned(ChangeInfoMixin):
             if k in from_dict and k not in to_dict:
                 diff[k] = (from_dict[k], None)
             elif k not in from_dict and k in to_dict:
-                diff[k] = (None, from_dict[k])
+                diff[k] = (None, to_dict[k])
             else:
                 # it's in both
                 if from_dict[k] != to_dict[k]:

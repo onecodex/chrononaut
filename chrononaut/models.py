@@ -35,12 +35,14 @@ class HistorySnapshot(object):
     def __getattr__(self, name):
         if name in self.untracked:
             raise UntrackedAttributeError(
-                f"{name} is explicitly untracked via __chrononaut_untracked__."
+                "{} is explicitly untracked via __chrononaut_untracked__.".format(name)
             )
         elif name in self.hidden:
-            raise HiddenAttributeError(f"{name} is explicitly hidden via __chrononaut_hidden__.")
+            raise HiddenAttributeError(
+                "{} is explicitly hidden via __chrononaut_hidden__.".format(name)
+            )
         elif name not in self.data:
-            raise AttributeError(f"{self} has no attribute {name}")
+            raise AttributeError("{} has no attribute {}".format(self, name))
         else:
             return self.data[name]
 

@@ -29,6 +29,10 @@ database object with a Chrononaut :class:`VersionedSQLAlchemy` database connecti
     db = VersionedSQLAlchemy(app)
 
 
+This creates an ``activity`` table that keeps value snapshots for updated ``Versioned`` models, along
+with additional JSON ``user_info``, ``extra_info`` and ``changed`` columns explained in more detail
+below.
+
 After that, simply add the :class:`Versioned` mixin object to your standard Flask-SQLAlchemy models::
 
     # A simple User model with versioning to support tracking of, e.g.,
@@ -46,13 +50,13 @@ After that, simply add the :class:`Versioned` mixin object to your standard Flas
         login_count = db.Column(db.Integer())
 
 
-This creates an ``appuser_history`` table that provides prior record values, along with JSON ``change_info``
-and a ``changed`` microsecond-level timestamp.
+This creates starts tracking changes to the ``User`` model and populates the ``activity`` table
+with snapshots of previous values.
 
 
 Using model history
 -------------------
-Chrononaut automatically generates a history table for each model into which you mixin :class:`Versioned`. This history table facilitates::
+Chrononaut automatically generates history records for each model into which you mixin :class:`Versioned`. You can access past versions like so::
 
     # See if the user has changed their email
     # since they first signed up
@@ -75,18 +79,24 @@ Fine-grained versioning
 -----------------------
 By default, Chrononaut will automatically version every column in a model.
 
-In the above example, we do not want to retain past user passwords in our history table, so we add ``password`` to the model's ``__chrononaut_hidden__`` property. Changes to a user's password will now result in a new model version and creation of a history record, but the automatically generated ``appuser_history`` table will not have a ``password`` field and will only note that a hidden column was changed in its ``change_info`` JSON column.
+In the above example, we do not want to retain past user passwords in our history table, so we add ``password`` to the model's ``__chrononaut_hidden__`` property. Changes to a user's password will now result in a new model version and creation of a history record, but the automatically generated snapshot record will not contain a ``password`` field and will only note that a hidden column was changed in its ``extra_info`` JSON column.
 
 Similarly, Chrononaut's ``__chrononaut_untracked__`` property allows us to specify that we do not want to track a field at all. This is useful for changes that are regularly incremented, toggled, or otherwise changed but do not need to be tracked. A good example would be a ``starred`` property on an object or other UI state that might be persisted to the database between application sessions.
 
 
 Migrations
 ----------
-Chrononaut automatically generates a SQLAlchemy model (and corresponding table) for each :class:`Versioned` mixin. By default, this table is named ``tablename_history`` where ``tablename`` is the name of the table for the model. A custom table name may be specified by using the ``__chrononaut_tablename__`` property in the model.
-
-In order to use Chrononaut, it's important to keep your ``*_history`` tables in sync with your main tables. We recommend using `Alembic`_ for migrations which should automatically generate the ``*_history`` tables when you first add the :class:`Versioned` mixins and subsequent updates to your models.
+Chrononaut automatically generates a single SQLAlchemy model (and corresponding table) for tracking each model with :class:`Versioned` mixin. This table is named ``activity``.
+We recommend using `Alembic`_ for migrating your database.
 
 .. _Alembic: http://alembic.zzzcomputing.com/en/latest/
+
+
+Migrating from 0.1
+------------------
+If you have used Chrononaut 0.1 before, in order to migrate your project to 0.2, you need to migrate the ``*_history`` tables into the single ``activity`` table.
+We recommend using `Alembic` for this purpose. After updating the Chrononaut version and generating a new migration, you need to manually specify record migrations using provided
+``op.migrate_from_history_table`` Alembic operations for each table that was tracked by Chrononaut.
 
 
 More details

@@ -1,6 +1,7 @@
 from alembic.operations import Operations, MigrateOperation
 from chrononaut import ChrononautException
 
+
 @Operations.register_operation("migrate_from_history_table")
 class MigrateFromHistoryTableOp(MigrateOperation):
     """
@@ -11,7 +12,7 @@ class MigrateFromHistoryTableOp(MigrateOperation):
     def __init__(self, table_name, schema=None):
         self.schema = schema
         self.table_name = table_name
-    
+
     @classmethod
     def migrate_from_history_table(cls, operations, table_name, **kwargs):
         op = MigrateFromHistoryTableOp(table_name, **kwargs)
@@ -31,7 +32,7 @@ class MigrateToHistoryTableOp(MigrateOperation):
     def __init__(self, table_name, schema=None):
         self.schema = schema
         self.table_name = table_name
-    
+
     @classmethod
     def migrate_to_history_table(cls, operations, table_name, **kwargs):
         op = MigrateToHistoryTableOp(table_name, **kwargs)
@@ -43,9 +44,9 @@ class MigrateToHistoryTableOp(MigrateOperation):
 
 @Operations.implementation_for(MigrateFromHistoryTableOp)
 def migrate_from_history_table(operations, operation):
-    activity_table = "activity" if not operation.schema else f"{operation.schema}.activity"
+    activity_table = "activity" if not operation.schema else operation.schema + ".activity"
     table_name = (
-        operation.table_name.replace("_history", "") 
+        operation.table_name.replace("_history", "")
         if operation.table_name.endswith("_history")
         else operation.table_name
     )
