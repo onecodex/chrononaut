@@ -3,7 +3,9 @@
 from flask import g
 from flask.globals import _app_ctx_stack
 from datetime import datetime
+import dateutil.parser
 import pytz
+import six
 
 from sqlalchemy.orm import attributes, object_mapper
 from sqlalchemy.orm.exc import UnmappedColumnError
@@ -94,6 +96,12 @@ def chrononaut_snapshot_to_model(model, activity_obj):
                 return om.columns[col].type
         return None
 
+    def _reverse_map(col, value):
+        if isinstance(value, six.string_types) and str(_get_column_type(col)) == "DATETIME":
+            return dateutil.parser.isoparse(value)
+        else:
+            return value
+
     if not activity_obj.metadata or not isinstance(
         activity_obj, activity_obj.metadata._activity_cls
     ):
@@ -102,14 +110,7 @@ def chrononaut_snapshot_to_model(model, activity_obj):
     untracked_cols = set(getattr(model, "__chrononaut_untracked__", []))
     hidden_cols = set(getattr(model, "__chrononaut_hidden__", []))
 
-    data = {
-        k: (
-            datetime.fromisoformat(v)
-            if isinstance(v, str) and str(_get_column_type(k)) == "DATETIME"
-            else v
-        )
-        for k, v in activity_obj.data.items()
-    }
+    data = {k: _reverse_map(k, v) for k, v in activity_obj.data.items()}
 
     return HistorySnapshot(
         data,

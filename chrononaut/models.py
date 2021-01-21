@@ -54,3 +54,6 @@ class HistorySnapshot(object):
 
     def __delattr__(self, name):
         raise ChrononautException("Cannot modify a HistorySnapshot model.")
+
+    def __str__(self):
+        return "{} at {}: {}".format(self.table_name, self.changed, self.data)
