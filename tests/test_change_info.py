@@ -1,5 +1,6 @@
 import pytz
 from datetime import datetime, timedelta
+from chrononaut import extra_change_info
 
 
 def test_change_info_no_user(db, session):
@@ -53,8 +54,9 @@ def test_custom_change_info(db, session, extra_change_info):
 
 def test_change_info_mixin(db, session, logged_in_user):
     note = db.ChangeLog(note="Creating a new change note...")
-    session.add(note)
-    session.commit()
+    with extra_change_info(comment="Adding a note from test function"):
+        session.add(note)
+        session.commit()
     assert note.change_info["user_id"] == "test@example.com"
     assert note.change_info["remote_addr"] == "127.0.0.1"
     assert (datetime.now(pytz.utc) - note.changed).total_seconds() < 1

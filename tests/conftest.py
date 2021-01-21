@@ -199,7 +199,7 @@ def session(db, request):
     session.remove()
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="session")
 def security_app(app, db):
     sqlalchemy_datastore = flask_security.SQLAlchemyUserDatastore(db, db.User, db.Role)
 
