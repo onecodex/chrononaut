@@ -51,6 +51,8 @@ class Versioned(ChangeInfoMixin):
     which you do not want to retain indefinitely.
     """
 
+    __versioned__ = {}
+
     @declared_attr
     def __mapper_cls__(cls):
         def map_function(cls, *arg, **kw):
@@ -175,7 +177,7 @@ class Versioned(ChangeInfoMixin):
             if k in from_dict and k not in to_dict:
                 diff[k] = (from_dict[k], None)
             elif k not in from_dict and k in to_dict:
-                diff[k] = (None, from_dict[k])
+                diff[k] = (None, to_dict[k])
             else:
                 # it's in both
                 if from_dict[k] != to_dict[k]:

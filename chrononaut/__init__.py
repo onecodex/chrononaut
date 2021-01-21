@@ -30,7 +30,7 @@ from chrononaut.migrations import MigrateFromHistoryTableOp, MigrateToHistoryTab
 
 def versioned_objects(items):
     for obj in items:
-        if hasattr(obj, "version"):
+        if hasattr(obj, "__versioned__"):
             yield obj
 
 
@@ -45,13 +45,13 @@ def versioned_session(session):
                 increment_version_on_insert(obj)
 
         for obj in session.dirty:
-            if hasattr(obj, "version"):
+            if hasattr(obj, "__versioned__"):
                 create_version(obj, session)
             if hasattr(obj, "__chrononaut_record_change_info__"):
                 append_recorded_changes(obj, session)
 
         for obj in session.deleted:
-            if hasattr(obj, "version"):
+            if hasattr(obj, "__versioned__"):
                 create_version(obj, session, deleted=True)
 
 

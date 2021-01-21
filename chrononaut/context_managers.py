@@ -74,7 +74,7 @@ def append_change_info(obj, **kwargs):
     if _app_ctx_stack.top is None:
         raise ChrononautException("Can only use `append_change_info` in a Flask app context.")
 
-    if not hasattr(obj, "version"):
+    if not hasattr(obj, "__versioned__"):
         raise ChrononautException("Cannot append_change_info to an object that is not Versioned.")
 
     obj.__CHRONONAUT_RECORDED_CHANGES__ = {}
