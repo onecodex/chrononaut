@@ -32,6 +32,40 @@ def test_versioned_todo(db, session):
     assert prior_todos[0].__class__.__name__ == "HistorySnapshot"
 
 
+def test_model_changes(db, session):
+    todo_text = "Rule the world"
+    todo = db.Todo("Todo #1", todo_text)
+    session.add(todo)
+    session.commit()
+
+    # Create original model snapshot
+    todo.title = "Todo #2"
+    session.commit()
+
+    # Column `text` becomes untracked
+    untracked = getattr(todo, "__chrononaut_untracked__", [])
+    setattr(todo, "__chrononaut_untracked__", untracked + ["text"])
+
+    todo.title = "Todo #3"
+    session.commit()
+
+    diff = todo.diff(todo.pub_date)
+    assert "text" in diff
+    assert diff["text"] == (todo_text, None)
+
+    # Column `starred` becomes tracked
+    untracked = getattr(todo, "__chrononaut_untracked__", [])
+    untracked.remove("starred")
+    setattr(todo, "__chrononaut_untracked__", untracked)
+
+    todo.title = "Todo #4"
+    session.commit()
+
+    diff = todo.diff(todo.pub_date)
+    assert "starred" in diff
+    assert diff["starred"] == (None, False)
+
+
 def test_previous_version_not_modifiable(db, session):
     todo = db.Todo("Task 0", "Testing...")
     session.add(todo)
