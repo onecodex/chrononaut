@@ -1,5 +1,6 @@
 from datetime import datetime
 import os
+from enum import Enum
 
 import flask
 import flask_security
@@ -85,6 +86,11 @@ def generate_test_models(db):
             self.done = False
             self.pub_date = datetime.utcnow()
 
+    class Priority(Enum):
+        LOW = "low"
+        MEDIUM = "mid"
+        HIGH = "high"
+
     class Todo(db.Model, chrononaut.Versioned):
         __tablename__ = "todos"
         __chrononaut_hidden__ = ["done"]
@@ -97,6 +103,17 @@ def generate_test_models(db):
         done = db.Column(db.Boolean)
         starred = db.Column(db.Boolean)
         pub_date = db.Column(db.DateTime(timezone=True), index=True)
+        priority = db.Column(
+            db.Enum(
+                Priority,
+                validate_strings=True,
+                native_enum=False,
+                create_constraint=False,
+                values_callable=lambda x: [e.value for e in x],
+            ),
+            nullable=False,
+            default=Priority.MEDIUM,
+        )
 
         __mapper_args__ = {"polymorphic_identity": "basic", "polymorphic_on": todo_type}
 
@@ -168,7 +185,7 @@ def generate_test_models(db):
         id = db.Column(db.Integer, primary_key=True)
         note = db.Column(db.Text)
 
-    return Todo, UnversionedTodo, SpecialTodo, Report, User, Role, ChangeLog
+    return Todo, UnversionedTodo, SpecialTodo, Report, User, Role, ChangeLog, Priority
 
 
 @pytest.fixture(scope="function")

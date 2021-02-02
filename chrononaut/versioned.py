@@ -81,7 +81,9 @@ class Versioned(ChangeInfoMixin):
         mapper = object_mapper(self)
 
         # Get the primary keys for this table
-        prim_keys = [k.key for k in mapper.primary_key if k.key != "version"]
+        prim_keys = [
+            mapper.get_property_by_column(k).key for k in mapper.primary_key if k.key != "version"
+        ]
 
         # Find all previous versions that have the same primary keys and table name as myself
         query = activity.query.filter(

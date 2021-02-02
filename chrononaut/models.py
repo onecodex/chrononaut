@@ -23,28 +23,28 @@ class HistorySnapshot(object):
     __initialized__ = False
 
     def __init__(self, data, table_name, changed, user_info, extra_info, untracked=[], hidden=[]):
-        self.data = data
+        self._data = data
         self.table_name = table_name
         self.changed = changed
         self.user_info = user_info
         self.extra_info = extra_info
-        self.untracked = untracked
-        self.hidden = hidden
+        self._untracked = untracked
+        self._hidden = hidden
         self.__initialized__ = True
 
     def __getattr__(self, name):
-        if name in self.untracked:
+        if name in self._untracked:
             raise UntrackedAttributeError(
                 "{} is explicitly untracked via __chrononaut_untracked__.".format(name)
             )
-        elif name in self.hidden:
+        elif name in self._hidden:
             raise HiddenAttributeError(
                 "{} is explicitly hidden via __chrononaut_hidden__.".format(name)
             )
-        elif name not in self.data:
+        elif name not in self._data:
             raise AttributeError("{} has no attribute {}".format(self, name))
         else:
-            return self.data[name]
+            return self._data[name]
 
     def __setattr__(self, name, value):
         if self.__initialized__:
@@ -56,4 +56,4 @@ class HistorySnapshot(object):
         raise ChrononautException("Cannot modify a HistorySnapshot model.")
 
     def __str__(self):
-        return "{} at {}: {}".format(self.table_name, self.changed, self.data)
+        return "{} at {}: {}".format(self.table_name, self.changed, self._data)

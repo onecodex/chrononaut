@@ -8,9 +8,7 @@
 """
 
 import sqlalchemy
-
 from sqlalchemy import event
-
 from flask_sqlalchemy import SignallingSession, SQLAlchemy
 
 

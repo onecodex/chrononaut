@@ -1,3 +1,4 @@
+from chrononaut.flask_versioning import serialize_datetime
 from datetime import datetime
 import pytz
 
@@ -24,7 +25,7 @@ def test_versioned_todo(db, session):
     # Check old versions
     prior_todos = todo.versions()
     assert len(prior_todos) == 2
-    prior_title = prior_todos[0].data.get("title")
+    prior_title = prior_todos[0].title
 
     assert prior_todos[0].version == 0  # 0-based indexing
     assert prior_todos[1].version == 1
@@ -97,6 +98,19 @@ def test_delete_tracking(db, session):
     assert len(todo.versions()) == 1
 
 
+def test_versioning_enum_columns(db, session):
+    todo = db.Todo("Task 0.1", "Testing...")
+    todo.priority = db.Priority.HIGH
+    session.add(todo)
+    session.commit()
+    todo.title = "Task 0.2"
+    session.commit()
+
+    assert len(todo.versions()) == 1
+    prior_todo = todo.previous_version()
+    assert prior_todo.priority == str(db.Priority.HIGH)
+
+
 def test_versioning_datetime_columns(db, session):
     timestamp = datetime.now(pytz.utc)
     todo = db.Todo("Task 0.1", "Testing...")
@@ -108,7 +122,7 @@ def test_versioning_datetime_columns(db, session):
 
     assert len(todo.versions()) == 1
     prior_todo = todo.previous_version()
-    assert prior_todo.pub_date == timestamp
+    assert prior_todo.pub_date == serialize_datetime(timestamp)
 
 
 def test_untracked_columns(db, session):
@@ -131,7 +145,7 @@ def test_untracked_columns(db, session):
     session.commit()
     assert len(todo.versions()) == 1
     assert set(todo.versions()[0].user_info.keys()) == {"remote_addr", "user_id"}
-    assert "starred" not in todo.versions()[0].data
+    assert "starred" not in todo.versions()[0]._data
 
     # Accessing the untracked column from a historic model raises an exception
     prior_todo = todo.previous_version()
@@ -165,7 +179,7 @@ def test_hidden_columns(db, session):
     session.commit()
     last_todo = todo.versions()[-1]
     assert todo.title == "Not Done"
-    assert last_todo.data.get("title") == "Secret Todo"
+    assert last_todo.title == "Secret Todo"
     assert set(last_todo.user_info.keys()) == {"remote_addr", "user_id"}
     assert set(last_todo.extra_info.keys()) == {"hidden_cols_changed"}
     assert set(last_todo.extra_info["hidden_cols_changed"]) == {"done"}  # Only keep hidden columns
@@ -190,11 +204,11 @@ def test_versioning_relationships(db, session, logged_in_user):
     session.commit()
 
     # Relationships are *not* currently versioned, but IDs are
-    assert user.versions()[0].data.get("roles") is None
+    assert user.versions()[0]._data.get("roles") is None
 
     # But other relationships work via the foreign key column
     assert user.primary_role == role
-    assert user.versions()[0].data.get("primary_role_id") is None
+    assert user.versions()[0]._data.get("primary_role_id") is None
 
     # But not the relationship itself
     with pytest.raises(AttributeError):
@@ -217,7 +231,7 @@ def test_version_fetching_and_diffing(db, session):
 
     # Assert that they're ordered
     for ix, version in enumerate(todo.versions()):
-        assert version.data.get("text") == "Time {}".format(ix)
+        assert version.text == "Time {}".format(ix)
 
     # Make another set of changes
     time_1 = datetime.now(pytz.utc)

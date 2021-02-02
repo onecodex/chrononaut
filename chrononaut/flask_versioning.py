@@ -3,7 +3,7 @@
 from flask import g
 from flask.globals import _app_ctx_stack
 from datetime import datetime
-import dateutil.parser
+from dateutil.tz import tzutc
 import pytz
 import six
 
@@ -13,6 +13,13 @@ from sqlalchemy.orm.properties import RelationshipProperty
 
 from chrononaut.exceptions import ChrononautException
 from chrononaut.models import HistorySnapshot
+
+
+UTC = tzutc()
+
+
+def serialize_datetime(dt):
+    dt.astimezone(UTC).replace(tzinfo=None).isoformat() + "Z"
 
 
 def fetch_change_info(obj):
@@ -35,6 +42,17 @@ def model_to_chrononaut_snapshot(obj, obj_mapper=None):
     :param obj_mapper: (Optional) use this mapper, otherwise one will be inferred from obj.
     :return The object state snapshot dict and a set of dirty columns.
     """
+
+    def _default(val):
+        if val is None:
+            return None
+        elif isinstance(val, six.string_types) or isinstance(val, int) or isinstance(val, bool):
+            return val
+        elif isinstance(val, datetime):
+            return serialize_datetime(val)
+        else:
+            return str(val)
+
     if obj_mapper is None:
         obj_mapper = object_mapper(obj)
     obj_state = attributes.instance_state(obj)
@@ -75,11 +93,8 @@ def model_to_chrononaut_snapshot(obj, obj_mapper=None):
                 # if the attribute had no value.
                 attr[prop.key] = a[0]
                 dirty_cols.add(prop.key)
-
-            if prop.key in attr and isinstance(attr[prop.key], datetime):
-                attr[prop.key] = attr[prop.key].isoformat()
-
-    return attr, dirty_cols
+    values = {k: _default(v) for k, v in attr.items()}
+    return values, dirty_cols
 
 
 def chrononaut_snapshot_to_model(model, activity_obj):
@@ -90,18 +105,6 @@ def chrononaut_snapshot_to_model(model, activity_obj):
     :return The HistorySnapshot model.
     """
 
-    def _get_column_type(col):
-        for om in model.__mapper__.iterate_to_root():
-            if col in om.columns:
-                return om.columns[col].type
-        return None
-
-    def _reverse_map(col, value):
-        if isinstance(value, six.string_types) and str(_get_column_type(col)) == "DATETIME":
-            return dateutil.parser.isoparse(value)
-        else:
-            return value
-
     if not activity_obj.metadata or not isinstance(
         activity_obj, activity_obj.metadata._activity_cls
     ):
@@ -110,10 +113,8 @@ def chrononaut_snapshot_to_model(model, activity_obj):
     untracked_cols = set(getattr(model, "__chrononaut_untracked__", []))
     hidden_cols = set(getattr(model, "__chrononaut_hidden__", []))
 
-    data = {k: _reverse_map(k, v) for k, v in activity_obj.data.items()}
-
     return HistorySnapshot(
-        data,
+        activity_obj.data,
         activity_obj.table_name,
         activity_obj.changed,
         activity_obj.user_info,
