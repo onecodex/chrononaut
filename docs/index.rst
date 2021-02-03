@@ -94,10 +94,11 @@ We recommend using `Alembic`_ for migrating your database.
 
 Migrating from 0.1
 ------------------
-If you have used Chrononaut 0.1 before, in order to migrate your project to 0.2, you need to migrate the ``*_history`` tables into the single ``activity`` table.
-We recommend using `Alembic` for this purpose. After updating the Chrononaut version and generating a new migration, you need to manually specify record migrations using provided
-``op.migrate_from_history_table`` Alembic operations for each table that was tracked by Chrononaut.
+If you have used Chrononaut 0.1 before, in order to migrate your project to 0.2, all the ``*_history`` tables need to be migrated into the single ``activity`` table.
+We recommend using `Alembic` for this purpose. After updating the Chrononaut version and generating a new migration, the proper operations should be present in the generated script.
+Double check if all dropped ``*_history`` tables have a corresponding ``op.migrate_from_history_table`` Alembic operation included.
 
+.. warning:: Migrating the history data is non-reversible. Double check the generated Alembic migration script to make sure all data will be migrated, otherwise it may be lost!
 
 More details
 ------------

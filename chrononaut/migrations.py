@@ -1,4 +1,5 @@
 from alembic.operations import Operations, MigrateOperation
+from alembic.autogenerate import renderers, comparators
 from chrononaut import ChrononautException
 
 
@@ -67,3 +68,34 @@ def migrate_from_history_table(operations, operation):
 @Operations.implementation_for(MigrateToHistoryTableOp)
 def migrate_to_history_table(operations, operation):
     raise ChrononautException("Migrating back to history tables is not supported")
+
+
+@renderers.dispatch_for(MigrateFromHistoryTableOp)
+def render_migrate_from_history_table(autogen_context, op):
+    if op.schema:
+        return "op.migrate_from_history_table('{}', '{}')".format(op.table_name, op.schema)
+    else:
+        return "op.migrate_from_history_table('{}')".format(op.table_name)
+
+
+@renderers.dispatch_for(MigrateToHistoryTableOp)
+def render_migrate_to_history_table(autogen_context, op):
+    return ""  # empty by design
+
+
+@comparators.dispatch_for("table")
+def compare_dropped_table(
+    autogen_context, modify_ops, schema, table_name, conn_table, metadata_table
+):
+    is_drop_table = metadata_table is None
+    # TODO: try to narrow down this condition so that we don't capture a different table by accident
+    if (
+        not is_drop_table
+        or not table_name.endswith("_history")
+        or "version" not in conn_table._columns
+    ):
+        return
+    if "activity" not in {t.name for t in autogen_context.sorted_tables}:
+        raise ChrononautException("Cannot migrate if 'activity' table is not present")
+
+    modify_ops.ops.append(MigrateFromHistoryTableOp(table_name, schema=schema))
