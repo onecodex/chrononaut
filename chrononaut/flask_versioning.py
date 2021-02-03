@@ -4,8 +4,8 @@ from flask import g
 from flask.globals import _app_ctx_stack
 from datetime import datetime
 from dateutil.tz import tzutc
-import pytz
 import six
+import numbers
 
 from sqlalchemy.orm import attributes, object_mapper
 from sqlalchemy.orm.exc import UnmappedColumnError
@@ -46,7 +46,11 @@ def model_to_chrononaut_snapshot(obj, obj_mapper=None):
     def _default(val):
         if val is None:
             return None
-        elif isinstance(val, six.string_types) or isinstance(val, int) or isinstance(val, bool):
+        elif (
+            isinstance(val, six.string_types)
+            or isinstance(val, numbers.Real)
+            or isinstance(val, bool)
+        ):
             return val
         elif isinstance(val, datetime):
             return serialize_datetime(val)
@@ -175,7 +179,7 @@ def create_version(obj, session, deleted=False):
 
     activity.table_name = obj_mapper.local_table.name
     activity.data = attrs
-    activity.changed = datetime.now(pytz.utc)
+    activity.changed = datetime.now(UTC)
     activity.version = obj.version or 0
     activity.user_info = user_info
     activity.extra_info = extra_info

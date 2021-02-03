@@ -37,7 +37,7 @@ def test_table_names(db, session):
     including custom `__chrononaut_tablename__` settings
     """
     assert set(db.metadata.tables.keys()) == {  # noqa
-        "activity",
+        "chrononaut_activity",
         "report",
         "todos",
         "unversioned_todos",

@@ -2,7 +2,6 @@
 Flask>=0.12
 Flask-SQLAlchemy>=2.2
 SQLAlchemy
-pytz>=2017.2
 psycopg2-binary>=2.8.1
 alembic>=1.5.1
 six>=1.15.0

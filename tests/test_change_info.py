@@ -1,6 +1,6 @@
-import pytz
 from datetime import datetime, timedelta
 from chrononaut import extra_change_info
+from chrononaut.flask_versioning import UTC
 
 
 def test_change_info_no_user(db, session):
@@ -12,9 +12,9 @@ def test_change_info_no_user(db, session):
     session.commit()
 
     prior_todo = todo.versions()[0]
-    assert set(prior_todo.user_info.keys()) == {"user_id", "remote_addr"}
-    assert prior_todo.user_info["remote_addr"] is None
-    assert prior_todo.user_info["user_id"] is None
+    assert set(prior_todo.chrononaut_meta["user_info"].keys()) == {"user_id", "remote_addr"}
+    assert prior_todo.chrononaut_meta["user_info"]["remote_addr"] is None
+    assert prior_todo.chrononaut_meta["user_info"]["user_id"] is None
 
 
 def test_change_info_anonymous_user(db, session, anonymous_user):
@@ -23,7 +23,7 @@ def test_change_info_anonymous_user(db, session, anonymous_user):
     session.commit()
     todo.title = "Modified"
     session.commit()
-    assert todo.versions()[0].user_info["user_id"] is None
+    assert todo.versions()[0].chrononaut_meta["user_info"]["user_id"] is None
 
 
 def test_change_info(db, session, logged_in_user):
@@ -35,9 +35,9 @@ def test_change_info(db, session, logged_in_user):
     session.commit()
 
     prior_todo = todo.versions()[0]
-    assert prior_todo.user_info["user_id"] == "test@example.com"
-    assert prior_todo.user_info["remote_addr"] == "127.0.0.1"
-    assert not prior_todo.extra_info
+    assert prior_todo.chrononaut_meta["user_info"]["user_id"] == "test@example.com"
+    assert prior_todo.chrononaut_meta["user_info"]["remote_addr"] == "127.0.0.1"
+    assert not prior_todo.chrononaut_meta["extra_info"]
 
 
 def test_custom_change_info(db, session, extra_change_info):
@@ -48,8 +48,8 @@ def test_custom_change_info(db, session, extra_change_info):
     session.commit()
 
     prior_todo = todo.versions()[0]
-    assert "extra_field" in prior_todo.extra_info
-    assert prior_todo.extra_info["extra_field"] is True
+    assert "extra_field" in prior_todo.chrononaut_meta["extra_info"]
+    assert prior_todo.chrononaut_meta["extra_info"]["extra_field"] is True
 
 
 def test_change_info_mixin(db, session, logged_in_user):
@@ -59,7 +59,7 @@ def test_change_info_mixin(db, session, logged_in_user):
         session.commit()
     assert note.change_info["user_id"] == "test@example.com"
     assert note.change_info["remote_addr"] == "127.0.0.1"
-    assert (datetime.now(pytz.utc) - note.changed).total_seconds() < 1
+    assert (datetime.now(UTC) - note.changed).total_seconds() < 1
     assert note.version == 0
     assert note.versions() == []
 
@@ -68,7 +68,7 @@ def test_change_info_mixin(db, session, logged_in_user):
     session.commit()
 
     # Also check that versions query works
-    now = datetime.now(pytz.utc)
+    now = datetime.now(UTC)
     before_test = now - timedelta(60)
     assert note.version == 1
     assert len(note.versions(before=now)) == 1

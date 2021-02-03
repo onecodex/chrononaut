@@ -4,9 +4,12 @@ from sqlalchemy.orm import mapper, object_mapper
 from chrononaut.change_info import ChangeInfoMixin
 from chrononaut.exceptions import ChrononautException
 from chrononaut.history_mapper import extend_mapper
-from chrononaut.flask_versioning import model_to_chrononaut_snapshot, chrononaut_snapshot_to_model
+from chrononaut.flask_versioning import (
+    model_to_chrononaut_snapshot,
+    chrononaut_snapshot_to_model,
+    UTC,
+)
 from datetime import datetime
-import pytz
 
 
 class Versioned(ChangeInfoMixin):
@@ -20,8 +23,8 @@ class Versioned(ChangeInfoMixin):
             ...
 
     The above will then automatically track updates to the ``User`` model and save
-    value snapshots of prior versions of each record to the ``activity`` table. By default,
-    *all* columns are tracked. By default, change information includes a ``user_id``
+    value snapshots of prior versions of each record to the ``chrononaut_activity`` table.
+    By default, *all* columns are tracked. By default, change information includes a ``user_id``
     and ``remote_addr``, which are set to automatically populate from Flask-Login's
     ``current_user`` in the :meth:`_capture_user_info` method. Subclass :class:`Versioned`
     and override a combination of :meth:`_capture_user_info`, :meth:`_fetch_current_user_id`,
@@ -156,7 +159,7 @@ class Versioned(ChangeInfoMixin):
         :return: A dict of column names and ``(from, to)`` value tuples
         """
         if to_timestamp is None:
-            to_timestamp = datetime.now(pytz.utc)
+            to_timestamp = datetime.now(UTC)
 
         if not isinstance(from_timestamp, datetime):
             raise ChrononautException("The diff method takes datetime as its argument.")
@@ -168,6 +171,14 @@ class Versioned(ChangeInfoMixin):
 
         from_dict = self.version_at(from_timestamp, return_snapshot=True)
         to_dict = self.version_at(to_timestamp, return_snapshot=True)
+
+        # Exit early if we are comparing object with itself
+        if (
+            "version" in from_dict
+            and "version" in to_dict
+            and from_dict["version"] == to_dict["version"]
+        ):
+            return {}
 
         hidden_cols = set(getattr(self, "__chrononaut_hidden__", []))
         all_keys = set(from_dict.keys())

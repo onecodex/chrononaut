@@ -88,8 +88,8 @@ class VersionedSQLAlchemy(SQLAlchemy):
 
     At its core, the :class:`VersionedSQLAlchemy` class simply ensures that database ``session``
     objects properly listen to events and create version records for models with the
-    :class:`Versioned` mixin. It also introduces the `activity` table which holds the data
-    snapshots of the edited entries.
+    :class:`Versioned` mixin. It also introduces the `chrononaut_activity` table which holds
+    the data snapshots of the edited entries.
     It can be accessed via `metadata._activity_cls`.
     """
 

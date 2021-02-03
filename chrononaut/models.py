@@ -6,7 +6,7 @@ from chrononaut.exceptions import UntrackedAttributeError, HiddenAttributeError,
 def activity_factory(Base, schema=None):
     class ActivityBase(Base):
         __table_args__ = {"schema": schema}
-        __tablename__ = "activity"
+        __tablename__ = "chrononaut_activity"
 
         id = sa.Column(sa.BigInteger, primary_key=True)
         table_name = sa.Column(sa.Text, nullable=False, index=True)
@@ -22,18 +22,24 @@ def activity_factory(Base, schema=None):
 class HistorySnapshot(object):
     __initialized__ = False
 
-    def __init__(self, data, table_name, changed, user_info, extra_info, untracked=[], hidden=[]):
+    def __init__(
+        self, data, table_name, changed, user_info, extra_info, untracked=None, hidden=None
+    ):
         self._data = data
-        self.table_name = table_name
-        self.changed = changed
-        self.user_info = user_info
-        self.extra_info = extra_info
-        self._untracked = untracked
-        self._hidden = hidden
+        self.chrononaut_meta = {
+            "table_name": table_name,
+            "changed": changed,
+            "user_info": user_info,
+            "extra_info": extra_info,
+        }
+        self._untracked = untracked if untracked else []
+        self._hidden = hidden if hidden else []
         self.__initialized__ = True
 
     def __getattr__(self, name):
-        if name in self._untracked:
+        if name == "chrononaut_meta":
+            return self.chrononaut_meta
+        elif name in self._untracked:
             raise UntrackedAttributeError(
                 "{} is explicitly untracked via __chrononaut_untracked__.".format(name)
             )
@@ -56,4 +62,6 @@ class HistorySnapshot(object):
         raise ChrononautException("Cannot modify a HistorySnapshot model.")
 
     def __str__(self):
-        return "{} at {}: {}".format(self.table_name, self.changed, self._data)
+        return "{} at {}: {}".format(
+            self.chrononaut_meta["table_name"], self.chrononaut_meta["changed"], self._data
+        )

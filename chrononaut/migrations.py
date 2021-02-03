@@ -45,7 +45,9 @@ class MigrateToHistoryTableOp(MigrateOperation):
 
 @Operations.implementation_for(MigrateFromHistoryTableOp)
 def migrate_from_history_table(operations, operation):
-    activity_table = "activity" if not operation.schema else operation.schema + ".activity"
+    activity_table = (
+        "chrononaut_activity" if not operation.schema else operation.schema + ".chrononaut_activity"
+    )
     table_name = (
         operation.table_name.replace("_history", "")
         if operation.table_name.endswith("_history")
@@ -95,7 +97,7 @@ def compare_dropped_table(
         or "version" not in conn_table._columns
     ):
         return
-    if "activity" not in {t.name for t in autogen_context.sorted_tables}:
-        raise ChrononautException("Cannot migrate if 'activity' table is not present")
+    if "chrononaut_activity" not in {t.name for t in autogen_context.sorted_tables}:
+        raise ChrononautException("Cannot migrate if 'chrononaut_activity' table is not present")
 
     modify_ops.ops.append(MigrateFromHistoryTableOp(table_name, schema=schema))

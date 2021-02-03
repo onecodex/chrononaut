@@ -28,7 +28,9 @@ def test_migrate_history_table(db, session, alembic_op):
     assert todo.versions()[0].text == "Tpo in text"
 
     # Test user info migration
-    assert prior_todo.user_info["user_id"] == 42
+    assert prior_todo.chrononaut_meta["user_info"]["user_id"] == 42
 
     # Test extra info migration
-    assert prior_todo.extra_info["rationale"] == "Should have always been complex"
+    assert (
+        prior_todo.chrononaut_meta["extra_info"]["rationale"] == "Should have always been complex"
+    )

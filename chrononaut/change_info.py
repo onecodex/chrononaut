@@ -1,6 +1,5 @@
 """Change info mixins. Require Flask for getting request and app context variables.
 """
-import pytz
 from datetime import datetime
 
 from flask import current_app, g, request
@@ -10,6 +9,7 @@ from sqlalchemy.dialects import postgresql
 
 from chrononaut.exceptions import ChrononautException
 from chrononaut.flask_versioning import fetch_change_info
+from chrononaut.flask_versioning import UTC
 
 
 def _in_flask_context():
@@ -89,7 +89,7 @@ class RecordChanges(ChangeInfoMixin):
 
     __chrononaut_record_change_info__ = True
     change_info = Column("change_info", postgresql.JSONB, default=None)
-    changed = Column("changed", DateTime(timezone=True), default=lambda: datetime.now(pytz.utc))
+    changed = Column("changed", DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
 
 def append_recorded_changes(obj, session):
@@ -109,7 +109,7 @@ def append_recorded_changes(obj, session):
         change_info["extra"] = extra_info
 
     obj.change_info = change_info
-    obj.changed = datetime.now(pytz.utc)
+    obj.changed = datetime.now(UTC)
 
 
 def increment_version_on_insert(obj):

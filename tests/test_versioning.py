@@ -1,6 +1,5 @@
-from chrononaut.flask_versioning import serialize_datetime
+from chrononaut.flask_versioning import serialize_datetime, UTC
 from datetime import datetime
-import pytz
 
 import pytest
 import chrononaut
@@ -112,7 +111,7 @@ def test_versioning_enum_columns(db, session):
 
 
 def test_versioning_datetime_columns(db, session):
-    timestamp = datetime.now(pytz.utc)
+    timestamp = datetime.now(UTC)
     todo = db.Todo("Task 0.1", "Testing...")
     todo.pub_date = timestamp
     session.add(todo)
@@ -144,7 +143,7 @@ def test_untracked_columns(db, session):
     todo.starred = False
     session.commit()
     assert len(todo.versions()) == 1
-    assert set(todo.versions()[0].user_info.keys()) == {"remote_addr", "user_id"}
+    assert set(todo.versions()[0].chrononaut_meta["user_info"].keys()) == {"remote_addr", "user_id"}
     assert "starred" not in todo.versions()[0]._data
 
     # Accessing the untracked column from a historic model raises an exception
@@ -171,7 +170,7 @@ def test_hidden_columns(db, session):
 
     # Assert that change info is included for the hidden column
     prior_todo = todo.versions()[0]
-    assert set(prior_todo.extra_info["hidden_cols_changed"]) == {"done"}
+    assert set(prior_todo.chrononaut_meta["extra_info"]["hidden_cols_changed"]) == {"done"}
 
     # Assert multiple columns are tracked
     todo.done = False
@@ -180,9 +179,10 @@ def test_hidden_columns(db, session):
     last_todo = todo.versions()[-1]
     assert todo.title == "Not Done"
     assert last_todo.title == "Secret Todo"
-    assert set(last_todo.user_info.keys()) == {"remote_addr", "user_id"}
-    assert set(last_todo.extra_info.keys()) == {"hidden_cols_changed"}
-    assert set(last_todo.extra_info["hidden_cols_changed"]) == {"done"}  # Only keep hidden columns
+    assert set(last_todo.chrononaut_meta["user_info"].keys()) == {"remote_addr", "user_id"}
+    assert set(last_todo.chrononaut_meta["extra_info"].keys()) == {"hidden_cols_changed"}
+    # Only keep hidden columns
+    assert set(last_todo.chrononaut_meta["extra_info"]["hidden_cols_changed"]) == {"done"}
 
     prior_todo = todo.previous_version()
     # Accessing the hidden column from the history model fails
@@ -216,7 +216,7 @@ def test_versioning_relationships(db, session, logged_in_user):
 
 
 def test_version_fetching_and_diffing(db, session):
-    time_0 = datetime.now(pytz.utc)
+    time_0 = datetime.now(UTC)
     todo = db.Todo("Dated Todo", "Time 0")
     session.add(todo)
     session.commit()
@@ -234,7 +234,7 @@ def test_version_fetching_and_diffing(db, session):
         assert version.text == "Time {}".format(ix)
 
     # Make another set of changes
-    time_1 = datetime.now(pytz.utc)
+    time_1 = datetime.now(UTC)
     todo.text = "Time Last"
     todo.starred = True
     session.commit()
@@ -242,8 +242,8 @@ def test_version_fetching_and_diffing(db, session):
     assert len(todo.versions()) == 10
     assert len(todo.versions(before=time_1)) == 9
     assert len(todo.versions(after=time_1)) == 1
-    assert len(todo.versions(after=datetime.now(pytz.utc))) == 0
-    assert len(todo.versions(before=datetime.now(pytz.utc))) == 10
+    assert len(todo.versions(after=datetime.now(UTC))) == 0
+    assert len(todo.versions(before=datetime.now(UTC))) == 10
 
     # Test version_at
     first_version = todo.version_at(time_0)
@@ -252,7 +252,7 @@ def test_version_fetching_and_diffing(db, session):
     ninth_version = todo.version_at(time_1)
     assert ninth_version.text == "Time 9"
     assert ninth_version.__class__.__name__ == "HistorySnapshot"
-    current_version = todo.version_at(datetime.now(pytz.utc))
+    current_version = todo.version_at(datetime.now(UTC))
     assert current_version.text == "Time Last"
     assert current_version.__class__.__name__ == "Todo"
     assert current_version.starred is True  # untracked field
@@ -260,7 +260,7 @@ def test_version_fetching_and_diffing(db, session):
     # Test has_changed_since
     assert todo.has_changed_since(time_0) is True
     assert todo.has_changed_since(time_1) is True
-    assert todo.has_changed_since(datetime.now(pytz.utc)) is False
+    assert todo.has_changed_since(datetime.now(UTC)) is False
 
     # Test diff logic, note the untracked column should not show up
     assert set(todo.diff(time_0).keys()) == {"text", "version"}

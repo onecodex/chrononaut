@@ -17,13 +17,16 @@ def test_extra_change_info(db, session):
         todo.title = "Task -1"
         session.commit()
 
-    assert todo.versions()[0].extra_info["reason"] == "The commit *must* be in the block."
+    assert (
+        todo.versions()[0].chrononaut_meta["extra_info"]["reason"]
+        == "The commit *must* be in the block."
+    )
 
     with extra_change_info(reason="Other no change info is recorded."):
         todo.title = "Task -2"
     session.commit()
 
-    assert "reason" not in todo.versions()[1].extra_info.keys()
+    assert "reason" not in todo.versions()[1].chrononaut_meta["extra_info"].keys()
 
 
 def test_append_change_info(db, session):
@@ -37,7 +40,7 @@ def test_append_change_info(db, session):
     # Commit does *not* need to be in the block
     session.commit()
 
-    assert todo.versions()[0].extra_info["reason"] == "Extra object info"
+    assert todo.versions()[0].chrononaut_meta["extra_info"]["reason"] == "Extra object info"
 
 
 def test_unstrict_session(db, session):
@@ -72,4 +75,4 @@ def test_rationale(db, session):
     todo.title = "Updated for testing..."
     with rationale("For testing!"):
         session.commit()
-    assert todo.versions()[0].extra_info["rationale"] == "For testing!"
+    assert todo.versions()[0].chrononaut_meta["extra_info"]["rationale"] == "For testing!"

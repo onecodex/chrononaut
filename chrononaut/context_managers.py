@@ -29,7 +29,7 @@ def extra_change_info(**kwargs):
     """
     if _app_ctx_stack.top is None:
         raise ChrononautException("Can only use `extra_change_info` in a Flask app context.")
-    setattr(g, "__version_extra_change_info__", kwargs)
+    g.__version_extra_change_info__ = kwargs
     yield
     delattr(g, "__version_extra_change_info__")
 

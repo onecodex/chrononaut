@@ -29,9 +29,9 @@ database object with a Chrononaut :class:`VersionedSQLAlchemy` database connecti
     db = VersionedSQLAlchemy(app)
 
 
-This creates an ``activity`` table that keeps value snapshots for updated ``Versioned`` models, along
-with additional JSON ``user_info``, ``extra_info`` and ``changed`` columns explained in more detail
-below.
+This creates an ``chrononaut_activity`` table that keeps value snapshots for updated ``Versioned``
+models, along with additional JSON ``user_info``, ``extra_info`` and ``changed`` columns explained
+in more detail below.
 
 After that, simply add the :class:`Versioned` mixin object to your standard Flask-SQLAlchemy models::
 
@@ -50,8 +50,8 @@ After that, simply add the :class:`Versioned` mixin object to your standard Flas
         login_count = db.Column(db.Integer())
 
 
-This creates starts tracking changes to the ``User`` model and populates the ``activity`` table
-with snapshots of previous values.
+This creates starts tracking changes to the ``User`` model and populates the ``chrononaut_activity``
+table with snapshots of previous values.
 
 
 Using model history
@@ -86,7 +86,8 @@ Similarly, Chrononaut's ``__chrononaut_untracked__`` property allows us to speci
 
 Migrations
 ----------
-Chrononaut automatically generates a single SQLAlchemy model (and corresponding table) for tracking each model with :class:`Versioned` mixin. This table is named ``activity``.
+Chrononaut automatically generates a single SQLAlchemy model (and corresponding table) for tracking
+each model with :class:`Versioned` mixin. This table is named ``chrononaut_activity``.
 We recommend using `Alembic`_ for migrating your database.
 
 .. _Alembic: http://alembic.zzzcomputing.com/en/latest/
@@ -94,7 +95,7 @@ We recommend using `Alembic`_ for migrating your database.
 
 Migrating from 0.1
 ------------------
-If you have used Chrononaut 0.1 before, in order to migrate your project to 0.2, all the ``*_history`` tables need to be migrated into the single ``activity`` table.
+If you have used Chrononaut 0.1 before, in order to migrate your project to 0.2, all the ``*_history`` tables need to be migrated into the single ``chrononaut_activity`` table.
 We recommend using `Alembic` for this purpose. After updating the Chrononaut version and generating a new migration, the proper operations should be present in the generated script.
 Double check if all dropped ``*_history`` tables have a corresponding ``op.migrate_from_history_table`` Alembic operation included.
 
