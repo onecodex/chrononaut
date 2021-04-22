@@ -101,9 +101,18 @@ Double check if all dropped ``*_history`` tables have a corresponding ``op.migra
 
 .. warning:: Migrating the history data is non-reversible. Double check the generated Alembic migration script to make sure all data will be migrated, otherwise it may be lost!
 
+
+Known issues
+------------
+Adding a column to an already existing Primary Key on a table will make the historic versions of an object
+from before the change inaccessible via the ``Versioned`` mixin methods. The historic records will still be
+present in the database, but the ``versions``, ``version_at``, ``has_changed_since``, ``previous_version``
+and ``diff`` methods will no longer see the versions before PK change. This is considered an extremely
+rare scenario and won't be handled in the foreseeable future.
+
+
 More details
 ------------
-
 More in-depth information on Chrononaut's API is available below:
 
 .. toctree::
