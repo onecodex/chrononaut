@@ -87,11 +87,12 @@ class Versioned(ChangeInfoMixin):
         prim_keys = [
             mapper.get_property_by_column(k).key for k in mapper.primary_key if k.key != "version"
         ]
+        obj_key = {k: getattr(self, k) for k in prim_keys}
 
         # Find all previous versions that have the same primary keys and table name as myself
         query = activity.query.filter(
-            *[activity.data[k].astext.__eq__(str(getattr(self, k))) for k in prim_keys]
-        ).filter(activity.table_name.__eq__(mapper.local_table.name))
+            activity.key == obj_key, activity.table_name.__eq__(mapper.local_table.name)
+        )
 
         # Filter additionally by date as needed
         if before is not None:

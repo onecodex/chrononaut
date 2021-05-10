@@ -9,12 +9,19 @@ def activity_factory(Base, schema=None):
         __tablename__ = "chrononaut_activity"
 
         id = sa.Column(sa.BigInteger, primary_key=True)
-        table_name = sa.Column(sa.Text, nullable=False, index=True)
+        table_name = sa.Column(sa.Text, nullable=False)
         changed = sa.Column(sa.DateTime(timezone=True), nullable=False)
         version = sa.Column(sa.Integer, nullable=False, default=0)
+        key = sa.Column(JSONB, server_default="{}", nullable=False)
         data = sa.Column(JSONB, server_default="{}", nullable=False)
         user_info = sa.Column(JSONB, server_default="{}", nullable=False)
         extra_info = sa.Column(JSONB, server_default="{}", nullable=False)
+
+        # Since we only ever do equality comparison, Hash Index is the best bet
+        __extra_table_args__ = (
+            sa.Index("ix_chrononaut_activity_key", key, postgresql_using="hash"), 
+            sa.Index("ix_chrononaut_activity_table_name", table_name, postgresql_using="hash"),
+        )
 
     return ActivityBase
 
@@ -23,8 +30,9 @@ class HistorySnapshot(object):
     __initialized__ = False
 
     def __init__(
-        self, data, table_name, changed, user_info, extra_info, untracked=None, hidden=None
+        self, key, data, table_name, changed, user_info, extra_info, untracked=None, hidden=None
     ):
+        self._key = key
         self._data = data
         self.chrononaut_meta = {
             "table_name": table_name,
@@ -48,7 +56,7 @@ class HistorySnapshot(object):
                 "{} is explicitly hidden via __chrononaut_hidden__.".format(name)
             )
         elif name not in self._data:
-            raise AttributeError("{} has no attribute {}".format(self, name))
+            raise AttributeError("{} has no attribute `{}`".format(self, name))
         else:
             return self._data[name]
 

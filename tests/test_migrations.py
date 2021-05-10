@@ -1,6 +1,7 @@
 from sqlalchemy import text
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
+from chrononaut.migrations import MigrateFromHistoryTableOp  # noqa: F401
 import pytest
 
 
@@ -29,6 +30,7 @@ def test_migrate_history_table(db, session, alembic_op):
 
     # Test user info migration
     assert prior_todo.chrononaut_meta["user_info"]["user_id"] == 42
+    assert prior_todo._key == {"id": 1}
 
     # Test extra info migration
     assert (

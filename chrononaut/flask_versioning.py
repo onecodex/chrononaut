@@ -118,6 +118,7 @@ def chrononaut_snapshot_to_model(model, activity_obj):
     hidden_cols = set(getattr(model, "__chrononaut_hidden__", []))
 
     return HistorySnapshot(
+        activity_obj.key,
         activity_obj.data,
         activity_obj.table_name,
         activity_obj.changed,
@@ -174,10 +175,19 @@ def create_version(obj, session, deleted=False):
     for key in hidden_cols:
         del attrs[key]
 
+    # constructing the key
+    primary_keys = [
+        obj_mapper.get_property_by_column(k).key
+        for k in obj_mapper.primary_key
+        if k.key != "version"
+    ]
+    key = {k: getattr(obj, k) for k in primary_keys}
+
     # create the history object (except any hidden cols)
     activity = obj.metadata._activity_cls()
 
     activity.table_name = obj_mapper.local_table.name
+    activity.key = key
     activity.data = attrs
     activity.changed = datetime.now(UTC)
     activity.version = obj.version or 0

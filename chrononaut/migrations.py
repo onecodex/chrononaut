@@ -1,10 +1,9 @@
-from alembic.operations import Operations, MigrateOperation
-from alembic.autogenerate import renderers, comparators
+import alembic
 from chrononaut import ChrononautException
 
 
-@Operations.register_operation("migrate_from_history_table")
-class MigrateFromHistoryTableOp(MigrateOperation):
+@alembic.operations.Operations.register_operation("migrate_from_history_table")
+class MigrateFromHistoryTableOp(alembic.operations.MigrateOperation):
     """
     Migrate a single history table into the single activity model. Pass in base table
     name to migrate from (without the ``_history`` suffix).
@@ -23,8 +22,8 @@ class MigrateFromHistoryTableOp(MigrateOperation):
         return MigrateToHistoryTableOp(self.table_name, schema=self.schema)
 
 
-@Operations.register_operation("migrate_to_history_table")
-class MigrateToHistoryTableOp(MigrateOperation):
+@alembic.operations.Operations.register_operation("migrate_to_history_table")
+class MigrateToHistoryTableOp(alembic.operations.MigrateOperation):
     """
     Migrate activity entries into a history table. Pass in base table name
     to migrate to (without the ``_history`` suffix).
@@ -43,7 +42,7 @@ class MigrateToHistoryTableOp(MigrateOperation):
         return MigrateFromHistoryTableOp(self.table_name, schema=self.schema)
 
 
-@Operations.implementation_for(MigrateFromHistoryTableOp)
+@alembic.operations.Operations.implementation_for(MigrateFromHistoryTableOp)
 def migrate_from_history_table(operations, operation):
     activity_table = (
         "chrononaut_activity" if not operation.schema else operation.schema + ".chrononaut_activity"
@@ -55,24 +54,44 @@ def migrate_from_history_table(operations, operation):
     )
     history_table = table_name + "_history"
 
+    ops = operations
+    # Fetching primary key columns
+    sql = """
+        SELECT a.attname
+        FROM pg_index i
+        JOIN pg_attribute a ON a.attrelid = i.indrelid
+            AND a.attnum = ANY(i.indkey)
+        WHERE i.indrelid = '{}'::regclass
+        AND i.indisprimary AND a.attname <> 'version';
+    """.format(
+        history_table
+    )
+    result = ops.migration_context.impl._exec(sql)
+    primary_keys = [r[0] for r in result.fetchall()]
+
+    if not primary_keys:
+        # TODO: warn about this case
+        return
+
+    pk_obj = ", ".join([f"'{pk}', {history_table}.{pk}" for pk in primary_keys])
+
     sql = (
-        "INSERT INTO {}(table_name, changed, version, data, user_info, extra_info) "
-        "SELECT '{}', changed, version, "
+        "INSERT INTO {}(table_name, changed, version, key, data, user_info, extra_info) "
+        "SELECT '{}', changed, version, json_build_object({}), "
         "row_to_json({}.*)::jsonb #- '{{change_info}}' #- '{{changed}}', "
         "change_info #- '{{extra}}', coalesce(change_info->'extra', '{{}}')::jsonb "
         "FROM {} ORDER BY changed ASC"
-    ).format(activity_table, table_name, history_table, history_table)
+    ).format(activity_table, table_name, pk_obj, history_table, history_table)
 
-    conn = operations
-    conn.execute(sql)
+    ops.execute(sql)
 
 
-@Operations.implementation_for(MigrateToHistoryTableOp)
+@alembic.operations.Operations.implementation_for(MigrateToHistoryTableOp)
 def migrate_to_history_table(operations, operation):
     raise ChrononautException("Migrating back to history tables is not supported")
 
 
-@renderers.dispatch_for(MigrateFromHistoryTableOp)
+@alembic.autogenerate.renderers.dispatch_for(MigrateFromHistoryTableOp)
 def render_migrate_from_history_table(autogen_context, op):
     if op.schema:
         return "op.migrate_from_history_table('{}', '{}')".format(op.table_name, op.schema)
@@ -80,12 +99,12 @@ def render_migrate_from_history_table(autogen_context, op):
         return "op.migrate_from_history_table('{}')".format(op.table_name)
 
 
-@renderers.dispatch_for(MigrateToHistoryTableOp)
+@alembic.autogenerate.renderers.dispatch_for(MigrateToHistoryTableOp)
 def render_migrate_to_history_table(autogen_context, op):
     return ""  # empty by design
 
 
-@comparators.dispatch_for("table")
+@alembic.autogenerate.comparators.dispatch_for("table")
 def compare_dropped_table(
     autogen_context, modify_ops, schema, table_name, conn_table, metadata_table
 ):
