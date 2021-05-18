@@ -51,6 +51,13 @@ def versioned_session(session):
             if hasattr(obj, "__versioned__"):
                 create_version(obj, session, deleted=True)
 
+    @event.listens_for(session, "after_flush")
+    def after_flush(session, flush_context):
+        # Tracking inserts in `after_flush` because we need the id to be set
+        for obj in session.new:
+            if hasattr(obj, "__versioned__"):
+                create_version(obj, session, created=True)
+
 
 class VersionedSignallingSession(SignallingSession):
     """A subclass of Flask-SQLAlchemy's SignallingSession that supports

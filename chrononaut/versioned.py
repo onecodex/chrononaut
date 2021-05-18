@@ -5,7 +5,6 @@ from chrononaut.change_info import ChangeInfoMixin
 from chrononaut.exceptions import ChrononautException
 from chrononaut.history_mapper import extend_mapper
 from chrononaut.flask_versioning import (
-    model_to_chrononaut_snapshot,
     chrononaut_snapshot_to_model,
     UTC,
 )
@@ -65,11 +64,12 @@ class Versioned(ChangeInfoMixin):
 
         return map_function
 
-    def versions(self, before=None, after=None, return_query=False):
+    def versions(self, before=None, after=None, ordered=True, return_query=False):
         """Fetch the history of the given object from its history table.
 
-        :param before: Return changes only _before_ the provided ``DateTime``.
-        :param before: Return changes only _after_ the provided ``DateTime``.
+        :param before: Return snapshots created only _before_ the provided ``DateTime``.
+        :param after: Return snapshots created only _after_ the provided ``DateTime``.
+        :param ordered: Return snapshots ordered by ``version``.
         :param return_query: Return a SQLAlchemy query instead of a list of models.
         :return: List of HistorySnapshot models for the given object (or a query object).
         """
@@ -101,7 +101,8 @@ class Versioned(ChangeInfoMixin):
             query = query.filter(activity.changed >= after)
 
         # Order by the version
-        query = query.order_by(activity.version)
+        if ordered:
+            query = query.order_by(activity.version)
 
         if return_query:
             return query
@@ -113,14 +114,14 @@ class Versioned(ChangeInfoMixin):
 
         :param at: The DateTime at which to find the history record.
         :param return_snapshot: Return just the object snapshot dict instead of the model.
-        :return: The HistorySnapshot model representing the model at the given point in time
-        or the model itself if that is current.
+        :return: The HistorySnapshot model representing the model at the given point in time.
         """
-        query = self.versions(after=at, return_query=True)
-        history_model = query.first()
+        query = self.versions(before=at, ordered=False, return_query=True)
+        activity = self.metadata._activity_cls
+        history_model = query.order_by(activity.version.desc()).first()
 
         if history_model is None:
-            return self if not return_snapshot else model_to_chrononaut_snapshot(self)[0]
+            return None
         else:
             return (
                 history_model.data
@@ -143,12 +144,14 @@ class Versioned(ChangeInfoMixin):
         :return: The HistorySnapshot model with attributes set to the previous state,
         or ``None`` if no history exists.
         """
-        query = self.versions(return_query=True)
-        activity = self.metadata._activity_cls
+        if not self.version:
+            return None
 
-        # order_by(None) resets order_by() called in versions()
-        query = query.order_by(None).order_by(activity.version.desc())
-        history_model = query.first()
+        query = self.versions(ordered=False, return_query=True)
+        activity = self.metadata._activity_cls
+        history_model = (
+            query.filter(activity.version < self.version).order_by(activity.version.desc()).first()
+        )
         return chrononaut_snapshot_to_model(self, history_model) if history_model else None
 
     def diff(self, from_timestamp, to_timestamp=None, include_hidden=False):
@@ -170,32 +173,38 @@ class Versioned(ChangeInfoMixin):
                 "Diffs must be chronological. Your from_model post-dates your to."
             )
 
-        from_dict = self.version_at(from_timestamp, return_snapshot=True)
-        to_dict = self.version_at(to_timestamp, return_snapshot=True)
-
-        # Exit early if we are comparing object with itself
-        if (
-            "version" in from_dict
-            and "version" in to_dict
-            and from_dict["version"] == to_dict["version"]
-        ):
-            return {}
-
-        hidden_cols = set(getattr(self, "__chrononaut_hidden__", []))
-        all_keys = set(from_dict.keys())
-        all_keys.update(to_dict.keys())
-        all_keys = all_keys.difference(hidden_cols)
-
+        from_model = self.version_at(from_timestamp)
+        to_model = self.version_at(to_timestamp)
         diff = {}
-        for k in all_keys:
-            if k in from_dict and k not in to_dict:
-                diff[k] = (from_dict[k], None)
-            elif k not in from_dict and k in to_dict:
-                diff[k] = (None, to_dict[k])
-            else:
-                # it's in both
-                if from_dict[k] != to_dict[k]:
-                    diff[k] = (from_dict[k], to_dict[k])
+
+        if not from_model and not to_model:
+            return diff
+        elif not from_model:
+            to_dict = to_model._data
+            diff = {k: (None, to_dict[k]) for k in to_dict.keys()}
+        else:
+            from_dict = from_model._data
+            to_dict = to_model._data
+
+            # Exit early if we are comparing object with itself
+            if from_model.version == to_model.version:
+                return {}
+
+            hidden_cols = set(getattr(self, "__chrononaut_hidden__", []))
+            all_keys = set(from_dict.keys())
+            all_keys.update(to_dict.keys())
+            all_keys = all_keys.difference(hidden_cols)
+
+            diff = {}
+            for k in all_keys:
+                if k in from_dict and k not in to_dict:
+                    diff[k] = (from_dict[k], None)
+                elif k not in from_dict and k in to_dict:
+                    diff[k] = (None, to_dict[k])
+                else:
+                    # it's in both
+                    if from_dict[k] != to_dict[k]:
+                        diff[k] = (from_dict[k], to_dict[k])
 
         # If `include_hidden` we need to enumerate through every
         # model *since* the from_timestamp *until* the to_timestamp
@@ -207,7 +216,8 @@ class Versioned(ChangeInfoMixin):
             for version in between_versions.all():
                 if "hidden_cols_changed" in version.extra_info:
                     for hidden_col in version.extra_info["hidden_cols_changed"]:
-                        diff[hidden_col] = (None, to_dict[hidden_col])
+                        if hasattr(self, hidden_col):
+                            diff[hidden_col] = (None, getattr(self, hidden_col))
                     break
 
         return diff

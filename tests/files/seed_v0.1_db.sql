@@ -10,6 +10,7 @@ CREATE TABLE todos_history(
 	version INTEGER,
     changed TIMESTAMP WITH TIME ZONE,
     change_info JSONB,
+	created_at TIMESTAMP WITH TIME ZONE,
 	PRIMARY KEY (id, version)
 );
 
@@ -18,3 +19,7 @@ VALUES
     (1, 'Todo #1', 'Tpo in text', 'simple_todo', '{"user_id": 42, "remote_addr": null}'::jsonb, '2016-06-22 20:44:52.134125-01', 0),
     (1, 'Todo #1', 'Text without typo', 'complex_todo', '{"user_id": 42, "remote_addr": null, "extra": {"rationale": "Should have always been complex"}}'::jsonb, '2016-06-22 22:55:00.134125-01', 1),
     (2, 'Todo #2', 'Todo text', 'simple_todo', '{"user_id": null, "remote_addr": null}'::jsonb, '2016-06-22 20:11:52.134125-01', 0);
+
+INSERT INTO todos (id, title, text, todo_type, priority, version, created_at)
+VALUES
+    (1, 'Todo #1', 'Current todo text', 'simple_todo', 'mid', 2, '2016-06-20 20:12:11.134125-01');

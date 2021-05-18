@@ -57,32 +57,96 @@ def migrate_from_history_table(operations, operation):
     ops = operations
     # Fetching primary key columns
     sql = """
-        SELECT a.attname
-        FROM pg_index i
-        JOIN pg_attribute a ON a.attrelid = i.indrelid
-            AND a.attnum = ANY(i.indkey)
-        WHERE i.indrelid = '{}'::regclass
-        AND i.indisprimary AND a.attname <> 'version';
+        SELECT a.attname FROM pg_index i
+        JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+        WHERE i.indrelid = '{}'::regclass AND i.indisprimary AND a.attname <> 'version'
     """.format(
         history_table
     )
-    result = ops.migration_context.impl._exec(sql)
+    result = ops.impl._exec(sql)
     primary_keys = [r[0] for r in result.fetchall()]
 
     if not primary_keys:
         # TODO: warn about this case
         return
 
-    pk_obj = ", ".join([f"'{pk}', {history_table}.{pk}" for pk in primary_keys])
+    history_pk_obj = ", ".join(["'{0}', {1}.{0}".format(pk, history_table) for pk in primary_keys])
+    parent_pk_obj = ", ".join(["'{0}', {1}.{0}".format(pk, table_name) for pk in primary_keys])
 
+    # Step 1: copy records from the history table converting to snapshot format
     sql = (
-        "INSERT INTO {}(table_name, changed, version, key, data, user_info, extra_info) "
-        "SELECT '{}', changed, version, json_build_object({}), "
-        "row_to_json({}.*)::jsonb #- '{{change_info}}' #- '{{changed}}', "
-        "change_info #- '{{extra}}', coalesce(change_info->'extra', '{{}}')::jsonb "
-        "FROM {} ORDER BY changed ASC"
-    ).format(activity_table, table_name, pk_obj, history_table, history_table)
+        """
+        INSERT INTO {}(table_name, changed, version, key, data, user_info, extra_info)
+        SELECT '{}', changed, version, json_build_object({}),
+        row_to_json({}.*)::jsonb #- '{{change_info}}' #- '{{changed}}',
+        change_info #- '{{extra}}', coalesce(change_info->'extra', '{{}}')::jsonb
+        FROM {} ORDER BY changed ASC
+        """
+    ).format(activity_table, table_name, history_pk_obj, history_table, history_table)
+    ops.execute(sql)
 
+    # Step 2: copy the current state from the parent table converting to snapshot format
+    sql = (
+        """
+        INSERT INTO {0}(table_name, changed, version, key, data, user_info, extra_info)
+        SELECT '{1}', current_timestamp, version, json_build_object({2}),
+        row_to_json({1}.*)::jsonb #- '{{change_info}}' #- '{{changed}}',
+        '{{}}'::jsonb, '{{}}'::jsonb FROM {1}
+        """
+    ).format(activity_table, table_name, parent_pk_obj)
+    ops.execute(sql)
+
+    # Step 3: set `changed` timestamps and `change_info` to reflect snapshot creation
+    sql = (
+        """
+        WITH lck AS (
+            SELECT key, version, coalesce(
+                lag(changed) over (partition by key order by version),
+                changed
+            ) AS new_changed,
+            coalesce(
+                lag(user_info) over (partition by key order by version),
+                '{{}}'::jsonb
+            ) AS new_user_info,
+            coalesce(
+                lag(extra_info) over (partition by key order by version),
+                '{{}}'::jsonb
+            ) AS new_extra_info
+            FROM {0}
+            WHERE table_name = '{1}'
+        )
+        UPDATE {0} SET changed = lck.new_changed,
+            user_info = lck.new_user_info, extra_info = lck.new_extra_info
+        FROM lck
+        WHERE {0}.key = lck.key AND {0}.version = lck.version AND {0}.table_name = '{1}'
+        """
+    ).format(activity_table, table_name)
+    ops.execute(sql)
+
+    # Step 4: set the insert timestamp from `created_at` column if exists
+    sql = """
+        SELECT attname FROM pg_attribute
+        WHERE attrelid = '{}'::regclass AND NOT attisdropped AND attname = 'created_at';
+    """.format(
+        table_name
+    )
+
+    result = ops.impl._exec(sql)
+    created_at_result = [r[0] for r in result.fetchall()]
+
+    if not created_at_result:
+        return
+
+    sql = """
+    WITH lck AS (
+        SELECT json_build_object({0})::jsonb as key, created_at FROM {1}
+    )
+    UPDATE {2} SET changed = lck.created_at
+    FROM lck
+    WHERE {2}.version = 0 AND {2}.table_name = '{1}' and {2}.key = lck.key
+    """.format(
+        parent_pk_obj, table_name, activity_table
+    )
     ops.execute(sql)
 
 

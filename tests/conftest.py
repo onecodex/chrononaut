@@ -114,15 +114,18 @@ def generate_test_models(db):
             nullable=False,
             default=Priority.MEDIUM,
         )
+        created_at = db.Column(db.DateTime(timezone=True), default=sqlalchemy.func.now())
 
         __mapper_args__ = {"polymorphic_identity": "basic", "polymorphic_on": todo_type}
 
-        def __init__(self, title, text):
+        def __init__(self, title, text, preset_id=None):
             self.title = title
             self.text = text
             self.done = False
             self.starred = False
             self.pub_date = datetime.utcnow()
+            if preset_id:
+                self.id = preset_id
 
         @sqlalchemy.orm.validates("todo_type")
         def validate_todo_type(self, k, v):

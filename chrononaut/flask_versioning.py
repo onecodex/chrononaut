@@ -59,7 +59,6 @@ def model_to_chrononaut_snapshot(obj, obj_mapper=None):
 
     if obj_mapper is None:
         obj_mapper = object_mapper(obj)
-    obj_state = attributes.instance_state(obj)
     untracked_cols = set(getattr(obj, "__chrononaut_untracked__", []))
 
     attr = {}
@@ -81,22 +80,12 @@ def model_to_chrononaut_snapshot(obj, obj_mapper=None):
                 # column on the base class is a feature of the declarative module.
                 continue
 
-            # expired object attributes and also deferred cols might not be in the dict.
-            # force it to load no matter what by using getattr().
-            if prop.key not in obj_state.dict:
-                getattr(obj, prop.key)
+            attr[prop.key] = getattr(obj, prop.key)
 
-            a, u, d = attributes.get_history(obj, prop.key)
+            a, _, d = attributes.get_history(obj, prop.key)
+            if prop.key != "version" and (d or a):
+                dirty_cols.add(prop.key)
 
-            if d:
-                attr[prop.key] = d[0]
-                dirty_cols.add(prop.key)
-            elif u:
-                attr[prop.key] = u[0]
-            elif a:
-                # if the attribute had no value.
-                attr[prop.key] = a[0]
-                dirty_cols.add(prop.key)
     values = {k: _default(v) for k, v in attr.items()}
     return values, dirty_cols
 
@@ -129,7 +118,7 @@ def chrononaut_snapshot_to_model(model, activity_obj):
     )
 
 
-def create_version(obj, session, deleted=False):
+def create_version(obj, session, created=False, deleted=False):
     obj_mapper = object_mapper(obj)
     attrs, changed_cols = model_to_chrononaut_snapshot(obj, obj_mapper)
 
@@ -153,7 +142,7 @@ def create_version(obj, session, deleted=False):
                 if len(changed_cols) > 0:
                     break
 
-    if len(changed_cols) == 0 and not deleted:
+    if len(changed_cols) == 0 and not (deleted or created):
         return
 
     if session.app.config.get(
@@ -175,6 +164,10 @@ def create_version(obj, session, deleted=False):
     for key in hidden_cols:
         del attrs[key]
 
+    if not created:
+        obj.version = obj.version + 1
+        attrs["version"] = obj.version
+
     # constructing the key
     primary_keys = [
         obj_mapper.get_property_by_column(k).key
@@ -190,9 +183,8 @@ def create_version(obj, session, deleted=False):
     activity.key = key
     activity.data = attrs
     activity.changed = datetime.now(UTC)
-    activity.version = obj.version or 0
+    activity.version = 0 if created or not obj.version else obj.version
     activity.user_info = user_info
     activity.extra_info = extra_info
 
     session.add(activity)
-    obj.version = activity.version + 1

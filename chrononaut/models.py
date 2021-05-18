@@ -19,7 +19,7 @@ def activity_factory(Base, schema=None):
 
         # Since we only ever do equality comparison, Hash Index is the best bet
         __extra_table_args__ = (
-            sa.Index("ix_chrononaut_activity_key", key, postgresql_using="hash"), 
+            sa.Index("ix_chrononaut_activity_key", key, postgresql_using="hash"),
             sa.Index("ix_chrononaut_activity_table_name", table_name, postgresql_using="hash"),
         )
 
@@ -28,6 +28,7 @@ def activity_factory(Base, schema=None):
 
 class HistorySnapshot(object):
     __initialized__ = False
+    __eq_attrs__ = {"_key", "_data", "_untracked", "_hidden", "chrononaut_meta"}
 
     def __init__(
         self, key, data, table_name, changed, user_info, extra_info, untracked=None, hidden=None
@@ -68,6 +69,11 @@ class HistorySnapshot(object):
 
     def __delattr__(self, name):
         raise ChrononautException("Cannot modify a HistorySnapshot model.")
+
+    def __eq__(self, other):
+        if isinstance(other, HistorySnapshot):
+            return all(getattr(self, attr) == getattr(other, attr) for attr in self.__eq_attrs__)
+        return False
 
     def __str__(self):
         return "{} at {}: {}".format(
