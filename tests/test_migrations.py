@@ -22,7 +22,7 @@ def test_migrate_history_table(db, session, alembic_op):
     alembic_op.migrate_from_history_table("todos")
 
     activity_cls = db.metadata._activity_cls
-    assert activity_cls.query.count() == 4
+    assert activity_cls.query.count() == 6
 
     assert len(todo.versions()) == 3
     prior_todo = todo.previous_version()
