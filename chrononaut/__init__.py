@@ -23,6 +23,7 @@ from chrononaut.exceptions import ChrononautException
 from chrononaut.flask_versioning import create_version
 from chrononaut.versioned import Versioned
 from chrononaut.models import activity_factory
+from chrononaut.migrations import MigrateFromHistoryTableOp
 
 
 def versioned_objects(items):
@@ -115,4 +116,5 @@ __all__ = [
     "extra_change_info",
     "rationale",
     "ChrononautException",
+    "MigrateFromHistoryTableOp",
 ]
