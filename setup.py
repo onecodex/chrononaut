@@ -21,7 +21,12 @@ setup(
     name="chrononaut",
     version=__version__,  # noqa
     packages=find_packages(exclude=["*test*"]),
-    install_requires=["Flask>=0.12", "Flask-SQLAlchemy>=2.2", "psycopg2>=2.7.1"],
+    install_requires=[
+        "Flask>=0.12",
+        "Flask-SQLAlchemy>=2.2",
+        "SQLAlchemy>=1.4.0",
+        "psycopg2>=2.7.1",
+    ],
     extras_require={"user_info": ["Flask-Login>=0.4.0"]},
     include_package_data=True,
     zip_safe=False,

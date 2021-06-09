@@ -53,4 +53,4 @@ jobs:
       - name: Run all tests
         run: |
           . venv/bin/activate
-          make test
+          py.test tests/
