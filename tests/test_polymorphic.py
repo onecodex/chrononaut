@@ -39,7 +39,7 @@ def test_migrate_history_table(db, session, alembic_op):
 
     # Testing if base columns are saved
     time_0 = datetime.now(UTC)
-    existing = db.SpecialTodo.query.get(42)
+    existing = db.session.get(db.SpecialTodo, 42)
     existing.title = "New title #1"
     db.session.commit()
 
