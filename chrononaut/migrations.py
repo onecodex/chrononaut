@@ -102,7 +102,7 @@ def migrate_from_history_table(operations, operation):
         sql = (
             """
             INSERT INTO {0}(table_name, changed, version, key, data, user_info, extra_info)
-            SELECT '{1}', {3}.changed, {3}.version, json_build_object({2}),
+            SELECT '{1}', {3}.changed, COALESCE({3}.version, 0), json_build_object({2}),
             row_to_json({3}.*)::jsonb || row_to_json({4}.*)::jsonb #- '{{change_info}}'
             #- '{{changed}}', {3}.change_info #- '{{extra}}',
             coalesce({3}.change_info->'extra', '{{}}')::jsonb
@@ -113,7 +113,7 @@ def migrate_from_history_table(operations, operation):
         sql = (
             """
             INSERT INTO {0}(table_name, changed, version, key, data, user_info, extra_info)
-            SELECT '{1}', changed, version, json_build_object({2}),
+            SELECT '{1}', changed, COALESCE(version, 0), json_build_object({2}),
             row_to_json({3}.*)::jsonb #- '{{change_info}}' #- '{{changed}}',
             change_info #- '{{extra}}', coalesce(change_info->'extra', '{{}}')::jsonb
             FROM {3} ORDER BY changed ASC
@@ -126,7 +126,7 @@ def migrate_from_history_table(operations, operation):
         sql = (
             """
             INSERT INTO {0}(table_name, changed, version, key, data, user_info, extra_info)
-            SELECT '{1}', current_timestamp, {2}.version, json_build_object({3}),
+            SELECT '{1}', current_timestamp, COALESCE({2}.version, 0), json_build_object({3}),
             row_to_json({1}.*)::jsonb || row_to_json({2}.*)::jsonb #- '{{change_info}}'
             #- '{{changed}}', '{{}}'::jsonb, '{{}}'::jsonb
             FROM {1} JOIN {2} ON {1}.id = {2}.id
@@ -136,7 +136,7 @@ def migrate_from_history_table(operations, operation):
         sql = (
             """
             INSERT INTO {0}(table_name, changed, version, key, data, user_info, extra_info)
-            SELECT '{1}', current_timestamp, version, json_build_object({2}),
+            SELECT '{1}', current_timestamp, COALESCE(version, 0), json_build_object({2}),
             row_to_json({1}.*)::jsonb #- '{{change_info}}' #- '{{changed}}',
             '{{}}'::jsonb, '{{}}'::jsonb FROM {1}
             """
