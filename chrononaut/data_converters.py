@@ -1,13 +1,13 @@
 from sqlalchemy.sql.expression import text
-from versioned import Versioned
-from exceptions import ChrononautException
+from chrononaut.versioned import Versioned
+from chrononaut.exceptions import ChrononautException
 
 
 class HistoryModelDataConverter:
     def __init__(self, model):
         self.model = model
 
-    def convert(self, db, limit=10000):
+    def convert(self, session, limit=10000):
         """
         Converts `limit` records from legacy history table model to the single table model.
         Can be run multiple times. This allows for converting data in chunks, recommended usage
@@ -22,30 +22,38 @@ class HistoryModelDataConverter:
 
         table_name = self.model.__tablename__
         history_table_name = table_name + "_history"
-        activity_table = self.model.metadata._activity_cls
+        activity_table = self.model.metadata._activity_cls.__tablename__
 
         from_query_partial = "FROM {} ".format(table_name)
         history_from_query_partial = "FROM {} ".format(history_table_name)
         row_json_partial = "row_to_json({}.*)::jsonb ".format(table_name)
         history_row_json_partial = "row_to_json({}.*)::jsonb ".format(history_table_name)
-        pk_obj_partial = ""
-        history_pk_obj_partial = ""
+
         version_partial = ""
         created_at_partial = ""
 
+        # Gathering primary keys
+        pks = [
+            self.model.__mapper__.get_property_by_column(k).key
+            for k in self.model.__mapper__.primary_key
+            if k.key != "version"
+        ]
+        history_pk_obj_partial = ", ".join(
+            ["'{0}', {1}.{0}".format(key, history_table_name) for key in pks]
+        )
+        pk_obj_partial = ", ".join(["'{0}', {1}.{0}".format(key, table_name) for key in pks])
+
         join_table = table_name
 
-        # Get primary keys and handle concrete base class model subclass model
+        # Get columns (iterating mappers to root to handle concrete base class model)
         for mapper in self.model.__mapper__.iterate_to_root():
             mapper_table = mapper.local_table.name
             history_mapper_table = mapper_table + "_history"
 
             # Building query partials
             if mapper_table != table_name:
-                from_query_partial += (
-                    "JOIN {0} ON {1}.id = {0}.id AND {1}.version = {0}.version ".format(
-                        mapper_table, join_table
-                    )
+                from_query_partial += "JOIN {0} ON {1}.id = {0}.id ".format(
+                    mapper_table, join_table
                 )
                 history_from_query_partial += (
                     "JOIN {0} ON {1}.id = {0}.id AND {1}.version = {0}.version ".format(
@@ -73,17 +81,6 @@ class HistoryModelDataConverter:
                 if has_created_at_col:
                     created_at_partial = "{}.created_at".format(mapper_table)
 
-            # Gathering primary keys
-            pks = [
-                mapper.get_property_by_column(k).key
-                for k in mapper.primary_key
-                if k.key != "version"
-            ]
-            history_pk_obj_partial += ", ".join(
-                ["'{0}', {1}.{0}".format(key, history_mapper_table) for key in pks]
-            )
-            pk_obj_partial += ", ".join(["'{0}', {1}.{0}".format(key, mapper_table) for key in pks])
-
         if not version_partial:
             raise ChrononautException("Missing `version` column in model")
 
@@ -94,11 +91,11 @@ class HistoryModelDataConverter:
             WITH existing AS (SELECT key, version FROM {0} WHERE table_name = '{1}')
             INSERT INTO {0}(table_name, changed, version, key, data, user_info, extra_info)
             SELECT '{1}', {3}.changed, COALESCE({3}.version, 0) AS version,
-            json_build_object({2}) AS pk_obj, {4} #- '{{change_info}}' #- '{{changed}}',
+            json_build_object({2}), {4} #- '{{change_info}}' #- '{{changed}}',
             {3}.change_info #- '{{extra}}', coalesce({3}.change_info->'extra', '{{}}')::jsonb {5}
             WHERE NOT EXISTS (SELECT 1 FROM existing ex
-            WHERE ex.key = pk_obj AND ex.version = version)
-            ORDER BY changed ASC LIMIT {6}
+            WHERE ex.key = json_build_object({2})::jsonb AND ex.version = {3}.version)
+            ORDER BY {3}.changed ASC LIMIT {6}
             """
             ).format(
                 activity_table,
@@ -110,7 +107,8 @@ class HistoryModelDataConverter:
                 limit_left,
             )
         )
-        result = db.engine.execute(query).execution_options(autocommit=True)
+        result = session.execute(query)
+        session.commit()
         limit_left -= result.rowcount
 
         # Return if we already used up the limit
@@ -124,11 +122,11 @@ class HistoryModelDataConverter:
             WITH existing AS (SELECT key, version FROM {0} WHERE table_name = '{1}')
             INSERT INTO {0}(table_name, changed, version, key, data, user_info, extra_info)
             SELECT '{1}', current_timestamp, COALESCE({2}, 0) as version,
-            json_build_object({3}) as pk_obj, {4} #- '{{change_info}}' #- '{{changed}}',
+            json_build_object({3}), {4} #- '{{change_info}}' #- '{{changed}}',
             '{{}}'::jsonb, '{{}}'::jsonb {5}
             WHERE NOT EXISTS (SELECT 1 FROM existing ex
-            WHERE ex.key = pk_obj AND ex.version = version)
-            ORDER BY changed ASC LIMIT {6}
+            WHERE ex.key = json_build_object({3})::jsonb AND ex.version = {2})
+            ORDER BY {1}.id ASC LIMIT {6}
             """
             ).format(
                 activity_table,
@@ -140,14 +138,15 @@ class HistoryModelDataConverter:
                 limit_left,
             )
         )
-        result = db.engine.execute(query).execution_options(autocommit=True)
+        result = session.execute(query)
+        session.commit()
         limit_left -= result.rowcount
 
         # Return if we already used up the limit *or* if we didn't update anything
         if limit_left <= 0 or limit_left == limit:
             return limit - limit_left
 
-        # The following steps need to be run in one go
+        # The following steps need to be run in one go as it's too complicated to break them up
 
         # 3. Set `changed` timestamps and `change_info` to reflect snapshot creation
         query = text(
@@ -176,15 +175,15 @@ class HistoryModelDataConverter:
             """
             ).format(activity_table, table_name)
         )
-        db.engine.execute(query).execution_options(autocommit=True)
+        session.execute(query)
+        session.commit()
 
         # 4. Set the insert timestamp from `created_at` column if exists
         if created_at_partial:
             query = text(
                 """
                 WITH lck AS (
-                    SELECT json_build_object({0})::jsonb as key, {3} AS created_at
-                    FROM {4}
+                    SELECT json_build_object({0})::jsonb as key, {3} AS created_at {4}
                 )
                 UPDATE {2} SET changed = lck.created_at
                 FROM lck
@@ -197,9 +196,7 @@ class HistoryModelDataConverter:
                     from_query_partial,
                 )
             )
-
-        # query = text("").bindparams(table_name=table_name)
-        # result = db.engine.execute(text("")).execution_options(autocommit=True)
-        # result.rowcount # check output count (works, checked)
+            session.execute(query)
+            session.commit()
 
         return limit - limit_left

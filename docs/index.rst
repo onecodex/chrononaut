@@ -95,11 +95,21 @@ We recommend using `Alembic`_ for migrating your database.
 
 Migrating from 0.1
 ------------------
-If you have used Chrononaut 0.1 before, in order to migrate your project to 0.2, all the ``*_history`` tables need to be migrated into the single ``chrononaut_activity`` table.
-We recommend using `Alembic` for this purpose. After updating the Chrononaut version and generating a new migration, the proper operations should be present in the generated script.
-Double check if all dropped ``*_history`` tables have a corresponding ``op.migrate_from_history_table`` Alembic operation included.
+If you have used Chrononaut 0.1 before, in order to migrate your project to 0.2, all the ``*_history`` tables need
+to be migrated into the single ``chrononaut_activity`` table. We recommend using `Alembic` for this purpose. After
+updating the Chrononaut version and generating a new migration, you'll notice that the ``chrononaut_activity`` table
+was added and all the ```_history`` tables are being dropped.
 
-.. warning:: Migrating the history data is non-reversible. Double check the generated Alembic migration script to make sure all data will be migrated, otherwise it may be lost!
+If you want to convert your historic data, there is a ``chrononaut.data_converters.HistoryModelDataConverter`` class
+which you can use to convert all the required models. The conversion script may be run multiple times - and it's the
+recommended approach, run the script until it returns 0 (records converted) for each data model tyou want to convert.
+
+We recommend migrating to the new version of Chrononaut in three steps:
+* generate the migration to create the new ``chrononaut_activity`` table and indexes while removing drop table operations for ``*_history`` tables,
+* convert the data in whatever way that's convenient,
+* drop the ``*_history`` tables, e.g. by generating another migration.
+
+.. warning:: Migrating the history data is non-reversible. Double check the generated Alembic migration script and migrate your data, otherwise it may be lost!
 
 
 Known issues
@@ -109,6 +119,10 @@ from before the change inaccessible via the ``Versioned`` mixin methods. The his
 present in the database, but the ``versions``, ``version_at``, ``has_changed_since``, ``previous_version``
 and ``diff`` methods will no longer see the versions before PK change. This is considered an extremely
 rare scenario and won't be handled in the foreseeable future.
+
+When handling polymorphic models implemented via concrete base table model, data for each subclass needs
+to be converted separately. Migrating just the base class model won't work. Accessing the model's history
+also only works for subclasses, base class model doesn't "see" its previous versions.
 
 
 More details
