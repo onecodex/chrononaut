@@ -20,8 +20,8 @@ class HistoryModelDataConverter:
         self.row_json_partial = "row_to_json({}.*)::jsonb ".format(self.table_name)
         self.history_row_json_partial = "row_to_json({}.*)::jsonb ".format(self.history_table_name)
 
-        self.version_partial = ""
-        self.created_at_partial = ""
+        self.version_partial = None
+        self.created_at_partial = None
 
         # Gathering primary keys
         pks = [
@@ -132,11 +132,17 @@ class HistoryModelDataConverter:
 
         # Copy records from the history table converting to snapshot format
         # adding the current state from the parent table converting to snapshot format
+        # Seting `changed` timestamps and `change_info` to reflect snapshot creation
         query = text(
             (
                 """
             INSERT INTO {0}(table_name, changed, version, key, data, user_info, extra_info)
-            SELECT table_name, changed, version, key, data, user_info, extra_info
+            SELECT table_name,
+                COALESCE(
+                    LAG(changed) OVER (PARTITION BY key ORDER BY version),
+                    MIN(changed) OVER (PARTITION BY key)
+                ),
+                version, key, data, user_info, extra_info
             FROM (
                 (
                     SELECT {3}.id, '{1}' as table_name, {3}.changed,
@@ -144,14 +150,14 @@ class HistoryModelDataConverter:
                     {4} #- '{{change_info}}' #- '{{changed}}' as data,
                     {3}.change_info #- '{{extra}}' as user_info,
                     COALESCE({3}.change_info->'extra', '{{}}')::jsonb as extra_info {5}
-                    WHERE {3}.id > {10} AND {3}.id <= {11}
+                    WHERE {3}.id > {11} AND {3}.id <= {12}
                 )
                 UNION
                 (
-                    SELECT {1}.id, '{1}' as table_name, current_timestamp as changed,
+                    SELECT {1}.id, '{1}' as table_name, {10} as changed,
                     COALESCE({6}, 0) as version, json_build_object({7})::jsonb as key,
                     {8} #- '{{change_info}}' #- '{{changed}}' as data, '{{}}'::jsonb as user_info,
-                    '{{}}'::jsonb as extra_info {9} WHERE {1}.id > {10} AND {1}.id <= {11}
+                    '{{}}'::jsonb as extra_info {9} WHERE {1}.id > {11} AND {1}.id <= {12}
                 )
                 ORDER BY id ASC
             ) source
@@ -167,6 +173,7 @@ class HistoryModelDataConverter:
                 self.pk_obj_partial,
                 self.row_json_partial,
                 self.from_query_partial,
+                self.created_at_partial or "current_timestamp",
                 self.last_converted_id,
                 id_upper_bound,
             )
@@ -174,62 +181,6 @@ class HistoryModelDataConverter:
         logging.info(f"Executing {query}")
         result = session.execute(query)
         session.commit()
-
-        # Set `changed` timestamps and `change_info` to reflect snapshot creation
-        query = text(
-            (
-                """
-            WITH lck AS (
-                SELECT key, version, coalesce(
-                    lag(changed) over (partition by key order by version),
-                    changed
-                ) AS new_changed,
-                coalesce(
-                    lag(user_info) over (partition by key order by version),
-                    '{{}}'::jsonb
-                ) AS new_user_info,
-                coalesce(
-                    lag(extra_info) over (partition by key order by version),
-                    '{{}}'::jsonb
-                ) AS new_extra_info
-                FROM {0}
-                WHERE table_name = '{1}' AND (data->'id')::int > {2} AND (data->'id')::int <= {3}
-            )
-            UPDATE {0} SET changed = lck.new_changed,
-                user_info = lck.new_user_info, extra_info = lck.new_extra_info
-            FROM lck
-            WHERE {0}.key = lck.key AND {0}.version = lck.version AND {0}.table_name = '{1}'
-            """
-            ).format(self.activity_table, self.table_name, self.last_converted_id, id_upper_bound)
-        )
-        logging.info(f"Executing {query}")
-        session.execute(query)
-        session.commit()
-
-        # Set the insert timestamp from `created_at` column if exists
-        if self.created_at_partial:
-            query = text(
-                """
-                WITH lck AS (
-                    SELECT json_build_object({0})::jsonb as key, {3} AS created_at {4}
-                    WHERE {1}.id > {5} AND {1}.id <= {6}
-                )
-                UPDATE {2} SET changed = lck.created_at
-                FROM lck
-                WHERE {2}.version = 0 AND {2}.table_name = '{1}' and {2}.key = lck.key
-            """.format(
-                    self.pk_obj_partial,
-                    self.table_name,
-                    self.activity_table,
-                    self.created_at_partial,
-                    self.from_query_partial,
-                    self.last_converted_id,
-                    id_upper_bound,
-                )
-            )
-            logging.info(f"Executing {query}")
-            session.execute(query)
-            session.commit()
 
         self.last_converted_id = id_upper_bound
         return converted_ids

@@ -70,20 +70,20 @@ def test_convert_model_no_inheritance(db, session):
 
     # Test change info moved to proper snapshot version
     prior_todo = todo_1.previous_version()
-    assert "rationale" not in prior_todo.chrononaut_meta["extra_info"]
     current_snapshot = todo_1.versions()[-1]
+    assert "rationale" not in current_snapshot.chrononaut_meta["extra_info"]
     assert current_snapshot.version == 2
     # Test extra info migration
     assert (
-        current_snapshot.chrononaut_meta["extra_info"]["rationale"]
-        == "Should have always been complex"
+        prior_todo.chrononaut_meta["extra_info"]["rationale"] == "Should have always been complex"
     )
 
     # Test user info migration
     assert prior_todo.chrononaut_meta["user_info"]["user_id"] == 42
     assert prior_todo._key == {"id": 1}
+    assert insert_snapshot.chrononaut_meta["user_info"]["user_id"] == 42
     assert insert_snapshot.text == "Tpo in text"
-    assert "user_id" not in insert_snapshot.chrononaut_meta["user_info"]
+    assert "user_id" not in current_snapshot.chrononaut_meta["user_info"]
 
     # Test timestamp updates
     assert insert_snapshot.chrononaut_meta["changed"] == parse("2016-06-20 20:12:11.134125-01")
