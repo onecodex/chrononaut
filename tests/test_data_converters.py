@@ -13,6 +13,7 @@ def test_convert_model_polymorphic(db, session):
     converter = HistoryModelDataConverter(db.SpecialTodo)
     result = converter.convert(session, limit=500)
     assert result == 2
+    converter.update_timestamps(session)
 
     # There should be 2 records in the new table
     activity_cls = db.metadata._activity_cls
@@ -53,6 +54,7 @@ def test_convert_model_no_inheritance(db, session):
     converter = HistoryModelDataConverter(db.Todo)
     result = converter.convert(session, limit=500)
     assert result == 6
+    converter.update_timestamps(session)
 
     activity_cls = db.metadata._activity_cls
     assert activity_cls.query.count() == 6

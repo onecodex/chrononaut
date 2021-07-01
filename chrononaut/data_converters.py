@@ -1,11 +1,79 @@
 from sqlalchemy.sql.expression import text
 from chrononaut.versioned import Versioned
 from chrononaut.exceptions import ChrononautException
+import logging
 
 
 class HistoryModelDataConverter:
     def __init__(self, model):
+        if not issubclass(model, Versioned):
+            raise ChrononautException("Cannot migrate data from non-Versioned model")
+
         self.model = model
+        self.table_name = self.model.__tablename__
+        self.history_table_name = self.table_name + "_history"
+        self.activity_table = self.model.metadata._activity_cls.__tablename__
+        self.from_query_partial = "FROM {} ".format(self.table_name)
+        self.history_from_query_partial = "FROM {} ".format(self.history_table_name)
+        self.row_json_partial = "row_to_json({}.*)::jsonb ".format(self.table_name)
+        self.history_row_json_partial = "row_to_json({}.*)::jsonb ".format(self.history_table_name)
+
+        self.version_partial = ""
+        self.created_at_partial = ""
+
+        # Gathering primary keys
+        pks = [
+            self.model.__mapper__.get_property_by_column(k).key
+            for k in self.model.__mapper__.primary_key
+            if k.key != "version"
+        ]
+        self.history_pk_obj_partial = ", ".join(
+            ["'{0}', {1}.{0}".format(key, self.history_table_name) for key in pks]
+        )
+        self.pk_obj_partial = ", ".join(
+            ["'{0}', {1}.{0}".format(key, self.table_name) for key in pks]
+        )
+
+        join_table = self.table_name
+
+        # Get columns (iterating mappers to root to handle concrete base class model)
+        for mapper in self.model.__mapper__.iterate_to_root():
+            mapper_table = mapper.local_table.name
+            history_mapper_table = mapper_table + "_history"
+
+            # Building query partials
+            if mapper_table != self.table_name:
+                self.from_query_partial += "JOIN {0} ON {1}.id = {0}.id ".format(
+                    mapper_table, join_table
+                )
+                self.history_from_query_partial += (
+                    "JOIN {0} ON {1}.id = {0}.id AND {1}.version = {0}.version ".format(
+                        history_mapper_table, join_table + "_history"
+                    )
+                )
+                self.row_json_partial += "|| row_to_json({}.*)::jsonb ".format(mapper_table)
+                self.history_row_json_partial += "|| row_to_json({}.*)::jsonb ".format(
+                    mapper_table + "_history"
+                )
+
+            join_table = mapper_table
+
+            if not self.version_partial:
+                has_version_col = any(
+                    [obj_col.key == "version" for obj_col in mapper.local_table.c]
+                )
+                if has_version_col:
+                    self.version_partial = "{}.version".format(mapper_table)
+
+            if not self.created_at_partial:
+                has_created_at_col = any(
+                    [obj_col.key == "created_at" for obj_col in mapper.local_table.c]
+                )
+                if has_created_at_col:
+                    self.created_at_partial = "{}.created_at".format(mapper_table)
+
+        if not self.version_partial:
+            raise ChrononautException("Missing `version` column in model")
 
     def convert(self, session, limit=10000):
         """
@@ -15,74 +83,8 @@ class HistoryModelDataConverter:
 
         Returns the number of converted records.
         """
-        if not issubclass(self.model, Versioned):
-            raise ChrononautException("Cannot migrate data from non-Versioned model")
 
         limit_left = limit
-
-        table_name = self.model.__tablename__
-        history_table_name = table_name + "_history"
-        activity_table = self.model.metadata._activity_cls.__tablename__
-
-        from_query_partial = "FROM {} ".format(table_name)
-        history_from_query_partial = "FROM {} ".format(history_table_name)
-        row_json_partial = "row_to_json({}.*)::jsonb ".format(table_name)
-        history_row_json_partial = "row_to_json({}.*)::jsonb ".format(history_table_name)
-
-        version_partial = ""
-        created_at_partial = ""
-
-        # Gathering primary keys
-        pks = [
-            self.model.__mapper__.get_property_by_column(k).key
-            for k in self.model.__mapper__.primary_key
-            if k.key != "version"
-        ]
-        history_pk_obj_partial = ", ".join(
-            ["'{0}', {1}.{0}".format(key, history_table_name) for key in pks]
-        )
-        pk_obj_partial = ", ".join(["'{0}', {1}.{0}".format(key, table_name) for key in pks])
-
-        join_table = table_name
-
-        # Get columns (iterating mappers to root to handle concrete base class model)
-        for mapper in self.model.__mapper__.iterate_to_root():
-            mapper_table = mapper.local_table.name
-            history_mapper_table = mapper_table + "_history"
-
-            # Building query partials
-            if mapper_table != table_name:
-                from_query_partial += "JOIN {0} ON {1}.id = {0}.id ".format(
-                    mapper_table, join_table
-                )
-                history_from_query_partial += (
-                    "JOIN {0} ON {1}.id = {0}.id AND {1}.version = {0}.version ".format(
-                        history_mapper_table, join_table + "_history"
-                    )
-                )
-                row_json_partial += "|| row_to_json({}.*)::jsonb ".format(mapper_table)
-                history_row_json_partial += "|| row_to_json({}.*)::jsonb ".format(
-                    mapper_table + "_history"
-                )
-
-            join_table = mapper_table
-
-            if not version_partial:
-                has_version_col = any(
-                    [obj_col.key == "version" for obj_col in mapper.local_table.c]
-                )
-                if has_version_col:
-                    version_partial = "{}.version".format(mapper_table)
-
-            if not created_at_partial:
-                has_created_at_col = any(
-                    [obj_col.key == "created_at" for obj_col in mapper.local_table.c]
-                )
-                if has_created_at_col:
-                    created_at_partial = "{}.created_at".format(mapper_table)
-
-        if not version_partial:
-            raise ChrononautException("Missing `version` column in model")
 
         # 1. Copy records from the history table converting to snapshot format
         query = text(
@@ -98,15 +100,16 @@ class HistoryModelDataConverter:
             ORDER BY {3}.changed ASC LIMIT {6}
             """
             ).format(
-                activity_table,
-                table_name,
-                history_pk_obj_partial,
-                history_table_name,
-                history_row_json_partial,
-                history_from_query_partial,
+                self.activity_table,
+                self.table_name,
+                self.history_pk_obj_partial,
+                self.history_table_name,
+                self.history_row_json_partial,
+                self.history_from_query_partial,
                 limit_left,
             )
         )
+        logging.info(f"Executing {query}")
         result = session.execute(query)
         session.commit()
         limit_left -= result.rowcount
@@ -129,24 +132,28 @@ class HistoryModelDataConverter:
             ORDER BY {1}.id ASC LIMIT {6}
             """
             ).format(
-                activity_table,
-                table_name,
-                version_partial,
-                pk_obj_partial,
-                row_json_partial,
-                from_query_partial,
+                self.activity_table,
+                self.table_name,
+                self.version_partial,
+                self.pk_obj_partial,
+                self.row_json_partial,
+                self.from_query_partial,
                 limit_left,
             )
         )
+        logging.info(f"Executing {query}")
         result = session.execute(query)
         session.commit()
         limit_left -= result.rowcount
+        return limit - limit_left
 
-        # Return if we already used up the limit *or* if we didn't update anything
-        if limit_left <= 0 or limit_left == limit:
-            return limit - limit_left
-
-        # The following steps need to be run in one go as it's too complicated to break them up
+    def update_timestamps(self, session):
+        """
+        Updates the timestamps to reflect the correct snapshot model structure. Before,
+        the rows contained (current_timestamp, old_state) tuples. Now they'll contain
+        (current_timestamp, current_state). For insert records we fill in timestamp based
+        on the model's `created_at` column (if exists).
+        """
 
         # 3. Set `changed` timestamps and `change_info` to reflect snapshot creation
         query = text(
@@ -173,13 +180,14 @@ class HistoryModelDataConverter:
             FROM lck
             WHERE {0}.key = lck.key AND {0}.version = lck.version AND {0}.table_name = '{1}'
             """
-            ).format(activity_table, table_name)
+            ).format(self.activity_table, self.table_name)
         )
+        logging.info(f"Executing {query}")
         session.execute(query)
         session.commit()
 
         # 4. Set the insert timestamp from `created_at` column if exists
-        if created_at_partial:
+        if self.created_at_partial:
             query = text(
                 """
                 WITH lck AS (
@@ -189,14 +197,13 @@ class HistoryModelDataConverter:
                 FROM lck
                 WHERE {2}.version = 0 AND {2}.table_name = '{1}' and {2}.key = lck.key
             """.format(
-                    pk_obj_partial,
-                    table_name,
-                    activity_table,
-                    created_at_partial,
-                    from_query_partial,
+                    self.pk_obj_partial,
+                    self.table_name,
+                    self.activity_table,
+                    self.created_at_partial,
+                    self.from_query_partial,
                 )
             )
+            logging.info(f"Executing {query}")
             session.execute(query)
             session.commit()
-
-        return limit - limit_left
