@@ -9,6 +9,8 @@ class HistoryModelDataConverter:
         if not issubclass(model, Versioned):
             raise ChrononautException("Cannot migrate data from non-Versioned model")
 
+        self.last_converted_id = None
+
         self.model = model
         self.table_name = self.model.__tablename__
         self.history_table_name = self.table_name + "_history"
@@ -77,27 +79,82 @@ class HistoryModelDataConverter:
 
     def convert(self, session, limit=10000):
         """
-        Converts `limit` records from legacy history table model to the single table model.
+        Converts `limit` objects from legacy history table model to the single table model.
+        Note that it doesn't correspond to `limit` records as each object may be represented
+        by several records, depending on it's history.
+
+        Converted objects have the timestamps updated to reflect the correct snapshot model
+        structure. Before, the rows contained (current_timestamp, old_state) tuples. Now
+        they'll contain (current_timestamp, current_state). For insert records we fill in timestamp
+        based on the model's `created_at` column (if exists).
+
         Can be run multiple times. This allows for converting data in chunks, recommended usage
         is to run the method until it returns 0.
 
-        Returns the number of converted records.
+        Returns the number of converted objects.
         """
 
-        limit_left = limit
+        # Get the latest converted record
+        if not self.last_converted_id:
+            query = text(
+                "SELECT MAX((data->'id')::int) FROM {0} WHERE table_name = '{1}'".format(
+                    self.activity_table, self.table_name
+                )
+            )
+            logging.info(f"Executing {query}")
+            result = session.execute(query).first()
+            if result and result[0]:
+                self.last_converted_id = result[0]
+            else:
+                self.last_converted_id = -1
 
-        # 1. Copy records from the history table converting to snapshot format
+        # Get upper id for this conversion run
+        query = text(
+            """
+            WITH ids AS (
+                (SELECT id FROM {0} WHERE id > {2})
+                UNION
+                (SELECT id FROM {1} WHERE id > {2})
+                ORDER BY id ASC LIMIT {3}
+            )
+            SELECT MAX(id), COUNT(id) FROM ids
+            """.format(
+                self.table_name, self.history_table_name, self.last_converted_id, limit
+            )
+        )
+        logging.info(f"Executing {query}")
+        result = session.execute(query).first()
+        if not result or not result[0]:
+            # No ids left to convert
+            return 0
+        id_upper_bound = result[0]
+        converted_ids = result[1]
+
+        # Copy records from the history table converting to snapshot format
+        # adding the current state from the parent table converting to snapshot format
         query = text(
             (
                 """
-            WITH existing AS (SELECT key, version FROM {0} WHERE table_name = '{1}')
             INSERT INTO {0}(table_name, changed, version, key, data, user_info, extra_info)
-            SELECT '{1}', {3}.changed, COALESCE({3}.version, 0) AS version,
-            json_build_object({2}), {4} #- '{{change_info}}' #- '{{changed}}',
-            {3}.change_info #- '{{extra}}', coalesce({3}.change_info->'extra', '{{}}')::jsonb {5}
-            WHERE NOT EXISTS (SELECT 1 FROM existing ex
-            WHERE ex.key = json_build_object({2})::jsonb AND ex.version = {3}.version)
-            ORDER BY {3}.changed ASC LIMIT {6}
+            SELECT table_name, changed, version, key, data, user_info, extra_info
+            FROM (
+                (
+                    SELECT {3}.id, '{1}' as table_name, {3}.changed,
+                    COALESCE({3}.version, 0) AS version, json_build_object({2})::jsonb as key,
+                    {4} #- '{{change_info}}' #- '{{changed}}' as data,
+                    {3}.change_info #- '{{extra}}' as user_info,
+                    COALESCE({3}.change_info->'extra', '{{}}')::jsonb as extra_info {5}
+                    WHERE {3}.id > {10} AND {3}.id <= {11}
+                )
+                UNION
+                (
+                    SELECT {1}.id, '{1}' as table_name, current_timestamp as changed,
+                    COALESCE({6}, 0) as version, json_build_object({7})::jsonb as key,
+                    {8} #- '{{change_info}}' #- '{{changed}}' as data, '{{}}'::jsonb as user_info,
+                    '{{}}'::jsonb as extra_info {9} WHERE {1}.id > {10} AND {1}.id <= {11}
+                )
+                ORDER BY id ASC
+            ) source
             """
             ).format(
                 self.activity_table,
@@ -106,56 +163,19 @@ class HistoryModelDataConverter:
                 self.history_table_name,
                 self.history_row_json_partial,
                 self.history_from_query_partial,
-                limit_left,
-            )
-        )
-        logging.info(f"Executing {query}")
-        result = session.execute(query)
-        session.commit()
-        limit_left -= result.rowcount
-
-        # Return if we already used up the limit
-        if limit_left <= 0:
-            return limit - limit_left
-
-        # 2. Copy the current state from the parent table converting to snapshot format
-        query = text(
-            (
-                """
-            WITH existing AS (SELECT key, version FROM {0} WHERE table_name = '{1}')
-            INSERT INTO {0}(table_name, changed, version, key, data, user_info, extra_info)
-            SELECT '{1}', current_timestamp, COALESCE({2}, 0) as version,
-            json_build_object({3}), {4} #- '{{change_info}}' #- '{{changed}}',
-            '{{}}'::jsonb, '{{}}'::jsonb {5}
-            WHERE NOT EXISTS (SELECT 1 FROM existing ex
-            WHERE ex.key = json_build_object({3})::jsonb AND ex.version = {2})
-            ORDER BY {1}.id ASC LIMIT {6}
-            """
-            ).format(
-                self.activity_table,
-                self.table_name,
                 self.version_partial,
                 self.pk_obj_partial,
                 self.row_json_partial,
                 self.from_query_partial,
-                limit_left,
+                self.last_converted_id,
+                id_upper_bound,
             )
         )
         logging.info(f"Executing {query}")
         result = session.execute(query)
         session.commit()
-        limit_left -= result.rowcount
-        return limit - limit_left
 
-    def update_timestamps(self, session):
-        """
-        Updates the timestamps to reflect the correct snapshot model structure. Before,
-        the rows contained (current_timestamp, old_state) tuples. Now they'll contain
-        (current_timestamp, current_state). For insert records we fill in timestamp based
-        on the model's `created_at` column (if exists).
-        """
-
-        # 3. Set `changed` timestamps and `change_info` to reflect snapshot creation
+        # Set `changed` timestamps and `change_info` to reflect snapshot creation
         query = text(
             (
                 """
@@ -173,25 +193,26 @@ class HistoryModelDataConverter:
                     '{{}}'::jsonb
                 ) AS new_extra_info
                 FROM {0}
-                WHERE table_name = '{1}'
+                WHERE table_name = '{1}' AND (data->'id')::int > {2} AND (data->'id')::int <= {3}
             )
             UPDATE {0} SET changed = lck.new_changed,
                 user_info = lck.new_user_info, extra_info = lck.new_extra_info
             FROM lck
             WHERE {0}.key = lck.key AND {0}.version = lck.version AND {0}.table_name = '{1}'
             """
-            ).format(self.activity_table, self.table_name)
+            ).format(self.activity_table, self.table_name, self.last_converted_id, id_upper_bound)
         )
         logging.info(f"Executing {query}")
         session.execute(query)
         session.commit()
 
-        # 4. Set the insert timestamp from `created_at` column if exists
+        # Set the insert timestamp from `created_at` column if exists
         if self.created_at_partial:
             query = text(
                 """
                 WITH lck AS (
                     SELECT json_build_object({0})::jsonb as key, {3} AS created_at {4}
+                    WHERE {1}.id > {5} AND {1}.id <= {6}
                 )
                 UPDATE {2} SET changed = lck.created_at
                 FROM lck
@@ -202,8 +223,13 @@ class HistoryModelDataConverter:
                     self.activity_table,
                     self.created_at_partial,
                     self.from_query_partial,
+                    self.last_converted_id,
+                    id_upper_bound,
                 )
             )
             logging.info(f"Executing {query}")
             session.execute(query)
             session.commit()
+
+        self.last_converted_id = id_upper_bound
+        return converted_ids

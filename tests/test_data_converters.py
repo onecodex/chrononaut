@@ -12,8 +12,7 @@ def test_convert_model_polymorphic(db, session):
 
     converter = HistoryModelDataConverter(db.SpecialTodo)
     result = converter.convert(session, limit=500)
-    assert result == 2
-    converter.update_timestamps(session)
+    assert result == 1
 
     # There should be 2 records in the new table
     activity_cls = db.metadata._activity_cls
@@ -53,8 +52,7 @@ def test_convert_model_no_inheritance(db, session):
 
     converter = HistoryModelDataConverter(db.Todo)
     result = converter.convert(session, limit=500)
-    assert result == 6
-    converter.update_timestamps(session)
+    assert result == 3
 
     activity_cls = db.metadata._activity_cls
     assert activity_cls.query.count() == 6
@@ -98,25 +96,20 @@ def test_convert_model_no_inheritance(db, session):
 
 
 def test_convert_model_chunked(db, session):
-    limit = 2
-    expected_cycles = 4  # 6 records / 2 at a time + last "zero" cycle
     sql = text(open("tests/files/seed_v0.1_db.sql", "r").read())
     session.execute(sql)
     session.commit()
 
     converter = HistoryModelDataConverter(db.Todo)
 
-    cycles = 0
-    while cycles < 1000:  # preventing infinite loops
-        result = converter.convert(session, limit=2)
-        cycles += 1
+    result = converter.convert(session, limit=2)
+    assert result == 2
 
-        if cycles < expected_cycles:
-            assert result == limit
-        else:
-            assert result == 0
+    result = converter.convert(session, limit=2)
+    assert result == 1
 
-        if result == 0:
-            break
+    result = converter.convert(session, limit=2)
+    assert result == 0
 
-    assert cycles == 4
+    result = converter.convert(session, limit=2)
+    assert result == 0
