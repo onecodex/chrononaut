@@ -113,3 +113,26 @@ def test_convert_model_chunked(db, session):
 
     result = converter.convert(session, limit=2)
     assert result == 0
+
+
+def test_convert_all(db, session):
+    sql = text(open("tests/files/seed_v0.1_db.sql", "r").read())
+    session.execute(sql)
+    session.commit()
+
+    converter = HistoryModelDataConverter(db.Todo)
+    converter.convert_all(session)
+
+    activity_cls = db.metadata._activity_cls
+    assert activity_cls.query.count() == 6
+
+    todo_1 = db.Todo.query.get(1)
+    assert len(todo_1.versions()) == 3
+    assert todo_1.version == 2
+
+    insert_snapshot = todo_1.versions()[0]
+    assert insert_snapshot.chrononaut_meta["changed"] == todo_1.created_at
+    for i in range(1, len(todo_1.versions())):
+        prev_version = todo_1.versions()[i - 1]
+        next_version = todo_1.versions()[i]
+        assert prev_version.chrononaut_meta["changed"] < next_version.chrononaut_meta["changed"]

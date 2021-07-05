@@ -184,3 +184,61 @@ class HistoryModelDataConverter:
 
         self.last_converted_id = id_upper_bound
         return converted_ids
+
+    def convert_all(self, session):
+        """
+        Similar to `convert` method, but converts _all_ of the records from a given table.
+        Due to not having to split up the data, it's faster than the `convert` counterpart.
+
+        Warning: running multiple times will result in duplicated data, only use for smaller
+        tables and run _once_ per table. If unsure, use the `convert` method.
+        """
+
+        # Copy records from the history table converting to snapshot format
+        # adding the current state from the parent table converting to snapshot format
+        # Seting `changed` timestamps and `change_info` to reflect snapshot creation
+        query = text(
+            (
+                """
+            INSERT INTO {0}(table_name, changed, version, key, data, user_info, extra_info)
+            SELECT table_name,
+                COALESCE(
+                    LAG(changed) OVER (PARTITION BY key ORDER BY version),
+                    MIN(changed) OVER (PARTITION BY key)
+                ),
+                version, key, data, user_info, extra_info
+            FROM (
+                (
+                    SELECT {3}.id, '{1}' as table_name, {3}.changed,
+                    COALESCE({3}.version, 0) AS version, json_build_object({2})::jsonb as key,
+                    {4} #- '{{change_info}}' #- '{{changed}}' as data,
+                    {3}.change_info #- '{{extra}}' as user_info,
+                    COALESCE({3}.change_info->'extra', '{{}}')::jsonb as extra_info {5}
+                )
+                UNION
+                (
+                    SELECT {1}.id, '{1}' as table_name, {10} as changed,
+                    COALESCE({6}, 0) as version, json_build_object({7})::jsonb as key,
+                    {8} #- '{{change_info}}' #- '{{changed}}' as data, '{{}}'::jsonb as user_info,
+                    '{{}}'::jsonb as extra_info {9}
+                )
+                ORDER BY id ASC
+            ) source
+            """
+            ).format(
+                self.activity_table,
+                self.table_name,
+                self.history_pk_obj_partial,
+                self.history_table_name,
+                self.history_row_json_partial,
+                self.history_from_query_partial,
+                self.version_partial,
+                self.pk_obj_partial,
+                self.row_json_partial,
+                self.from_query_partial,
+                self.created_at_partial or "current_timestamp",
+            )
+        )
+        logging.info(f"Executing {query}")
+        session.execute(query)
+        session.commit()

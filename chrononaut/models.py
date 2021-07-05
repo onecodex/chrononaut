@@ -17,11 +17,8 @@ def activity_factory(Base, schema=None):
         user_info = sa.Column(JSONB, server_default="{}", nullable=False)
         extra_info = sa.Column(JSONB, server_default="{}", nullable=False)
 
-        # Since we only ever do equality comparison, Hash Index is the best bet
-        __extra_table_args__ = (
-            sa.Index("ix_chrononaut_activity_key", key, postgresql_using="hash"),
-            sa.Index("ix_chrononaut_activity_table_name", table_name, postgresql_using="hash"),
-        )
+        # Ensuring quick access to the relevant records
+        __extra_table_args__ = (sa.Index("ix_chrononaut_activity_key_table_name", key, table_name),)
 
     return ActivityBase
 
