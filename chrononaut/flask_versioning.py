@@ -18,7 +18,7 @@ UTC = tzutc()
 
 
 def serialize_datetime(dt):
-    return dt.astimezone(UTC).replace(tzinfo=None).isoformat() + "Z"
+    return dt.astimezone(UTC).replace(tzinfo=None).isoformat() + "+00:00"
 
 
 def fetch_change_info(obj):
