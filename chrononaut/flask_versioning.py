@@ -9,7 +9,6 @@ import numbers
 
 from sqlalchemy.orm import attributes, object_mapper
 from sqlalchemy.orm.exc import UnmappedColumnError
-from sqlalchemy.orm.properties import RelationshipProperty
 
 from chrononaut.exceptions import ChrononautException
 from chrononaut.models import HistorySnapshot
@@ -19,7 +18,7 @@ UTC = tzutc()
 
 
 def serialize_datetime(dt):
-    dt.astimezone(UTC).replace(tzinfo=None).isoformat() + "Z"
+    return dt.astimezone(UTC).replace(tzinfo=None).isoformat() + "Z"
 
 
 def fetch_change_info(obj):
@@ -80,11 +79,13 @@ def model_to_chrononaut_snapshot(obj, obj_mapper=None):
                 # column on the base class is a feature of the declarative module.
                 continue
 
-            attr[prop.key] = getattr(obj, prop.key)
+            attr[obj_col.name] = getattr(obj, prop.key)
 
-            a, _, d = attributes.get_history(obj, prop.key)
+            a, _, d = attributes.get_history(
+                obj, prop.key, passive=attributes.PASSIVE_NO_INITIALIZE
+            )
             if prop.key != "version" and (d or a):
-                dirty_cols.add(prop.key)
+                dirty_cols.add(obj_col.name)
 
     values = {k: _default(v) for k, v in attr.items()}
     return values, dirty_cols
@@ -121,26 +122,6 @@ def chrononaut_snapshot_to_model(model, activity_obj):
 def create_version(obj, session, created=False, deleted=False):
     obj_mapper = object_mapper(obj)
     attrs, changed_cols = model_to_chrononaut_snapshot(obj, obj_mapper)
-
-    if len(changed_cols) == 0:
-        # not changed, but we have relationships. check those too
-        no_init = attributes.PASSIVE_NO_INITIALIZE
-        for prop in obj_mapper.iterate_properties:
-            if hasattr(prop, "name"):
-                # in case it's a proxy property (synonym), this is correct column name
-                prop_name = prop.name
-            else:
-                # everything else
-                prop_name = prop.key
-            has_changes = attributes.get_history(obj, prop_name, passive=no_init).has_changes()
-            if isinstance(prop, RelationshipProperty) and has_changes:
-                for p in prop.local_columns:
-                    if p.foreign_keys:
-                        changed_cols.add(prop.key)
-                        break
-
-                if len(changed_cols) > 0:
-                    break
 
     if len(changed_cols) == 0 and not (deleted or created):
         return

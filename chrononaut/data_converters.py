@@ -146,7 +146,7 @@ class HistoryModelDataConverter:
             FROM (
                 (
                     SELECT {3}.id, '{1}' as table_name, {3}.changed,
-                    COALESCE({3}.version, 0) AS version, json_build_object({2})::jsonb as key,
+                    COALESCE({3}.version, 0) AS version, jsonb_build_object({2}) as key,
                     {4} #- '{{change_info}}' #- '{{changed}}' as data,
                     {3}.change_info #- '{{extra}}' as user_info,
                     COALESCE({3}.change_info->'extra', '{{}}')::jsonb as extra_info {5}
@@ -155,7 +155,7 @@ class HistoryModelDataConverter:
                 UNION
                 (
                     SELECT {1}.id, '{1}' as table_name, {10} as changed,
-                    COALESCE({6}, 0) as version, json_build_object({7})::jsonb as key,
+                    COALESCE({6}, 0) as version, jsonb_build_object({7}) as key,
                     {8} #- '{{change_info}}' #- '{{changed}}' as data, '{{}}'::jsonb as user_info,
                     '{{}}'::jsonb as extra_info {9} WHERE {1}.id > {11} AND {1}.id <= {12}
                 )
@@ -210,16 +210,16 @@ class HistoryModelDataConverter:
             FROM (
                 (
                     SELECT {3}.id, '{1}' as table_name, {3}.changed,
-                    COALESCE({3}.version, 0) AS version, json_build_object({2})::jsonb as key,
-                    {4} #- '{{change_info}}' #- '{{changed}}' as data,
-                    {3}.change_info #- '{{extra}}' as user_info,
+                    COALESCE({3}.version, 0) AS version, jsonb_build_object({2}) as key,
+                    {4} - 'change_info' - 'changed' as data,
+                    {3}.change_info - 'extra' as user_info,
                     COALESCE({3}.change_info->'extra', '{{}}')::jsonb as extra_info {5}
                 )
                 UNION
                 (
                     SELECT {1}.id, '{1}' as table_name, {10} as changed,
-                    COALESCE({6}, 0) as version, json_build_object({7})::jsonb as key,
-                    {8} #- '{{change_info}}' #- '{{changed}}' as data, '{{}}'::jsonb as user_info,
+                    COALESCE({6}, 0) as version, jsonb_build_object({7}) as key,
+                    {8} - 'change_info' - 'changed' as data, '{{}}'::jsonb as user_info,
                     '{{}}'::jsonb as extra_info {9}
                 )
                 ORDER BY id ASC
