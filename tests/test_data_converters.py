@@ -136,3 +136,57 @@ def test_convert_all(db, session):
         prev_version = todo_1.versions()[i - 1]
         next_version = todo_1.versions()[i]
         assert prev_version.chrononaut_meta["changed"] < next_version.chrononaut_meta["changed"]
+
+
+def test_update(db, session):
+    sql = text(open("tests/files/seed_v0.1_db.sql", "r").read())
+    session.execute(sql)
+    session.commit()
+
+    converter = HistoryModelDataConverter(db.Todo)
+    converter.convert_all(session)
+
+    activity_cls = db.metadata._activity_cls
+    assert activity_cls.query.count() == 6
+
+    sql = text(open("tests/files/seed_updates.sql", "r").read())
+    session.execute(sql)
+    session.commit()
+
+    # There were changes applied after the data migration that are now not reflected in our model
+    todo_1 = db.Todo.query.get(1)
+    assert len(todo_1.versions()) == 3
+    todo_44 = db.Todo.query.get(44)
+    assert len(todo_44.versions()) == 0
+
+    # Reinitialising the converter to reflect real use case
+    converter = HistoryModelDataConverter(db.Todo)
+    converter.update(session)
+
+    assert activity_cls.query.count() == 9
+
+    todo_1 = db.Todo.query.get(1)
+    todo_44 = db.Todo.query.get(44)
+
+    assert todo_1.text == "Changed current text"
+    assert len(todo_1.versions()) == 5
+    assert todo_1.versions()[-1].text == "Changed current text"
+    assert todo_1.versions()[-2].text == "Current todo text #2"
+
+    # Reflecting value from regular table, not history table
+    assert todo_1.versions()[-3].text == "Current todo text"
+    assert todo_1.versions()[-2].chrononaut_meta["user_info"]["user_id"] == 13
+    assert "user_id" not in todo_1.versions()[-3].chrononaut_meta["user_info"]
+    assert todo_1.versions()[-3].version == 2
+    assert todo_1.versions()[-3].chrononaut_meta["changed"] == parse(
+        "2016-06-22 22:55:00.134125-01"
+    )
+    assert todo_1.versions()[-2].chrononaut_meta["changed"] == parse(
+        "2016-06-23 11:12:00.134125-01"
+    )
+    assert todo_1.versions()[-1].chrononaut_meta["changed"] == parse(
+        "2016-06-23 11:42:00.134125-01"
+    )
+
+    assert len(todo_44.versions()) == 1
+    assert todo_44.versions()[0].text == todo_44.text

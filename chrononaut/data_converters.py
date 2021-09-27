@@ -2,10 +2,11 @@ from sqlalchemy.sql.expression import text
 from chrononaut.versioned import Versioned
 from chrononaut.exceptions import ChrononautException
 import logging
+import time
 
 
 class HistoryModelDataConverter:
-    def __init__(self, model):
+    def __init__(self, model, id_column="id"):
         if not issubclass(model, Versioned):
             raise ChrononautException("Cannot migrate data from non-Versioned model")
 
@@ -13,6 +14,7 @@ class HistoryModelDataConverter:
 
         self.model = model
         self.table_name = self.model.__tablename__
+        self.id_column = id_column
         self.history_table_name = self.table_name + "_history"
         self.activity_table = self.model.metadata._activity_cls.__tablename__
         self.from_query_partial = "FROM {} ".format(self.table_name)
@@ -97,8 +99,8 @@ class HistoryModelDataConverter:
         # Get the latest converted record
         if not self.last_converted_id:
             query = text(
-                "SELECT MAX((data->'id')::int) FROM {0} WHERE table_name = '{1}'".format(
-                    self.activity_table, self.table_name
+                "SELECT MAX((data->'{0}')::int) FROM {1} WHERE table_name = '{2}'".format(
+                    self.id_column, self.activity_table, self.table_name
                 )
             )
             logging.info(f"Executing {query}")
@@ -112,14 +114,18 @@ class HistoryModelDataConverter:
         query = text(
             """
             WITH ids AS (
-                (SELECT id FROM {0} WHERE id > {2})
+                (SELECT {0} AS id FROM {1} WHERE {0} > {3})
                 UNION
-                (SELECT id FROM {1} WHERE id > {2})
-                ORDER BY id ASC LIMIT {3}
+                (SELECT {0} AS id FROM {2} WHERE {0} > {3})
+                ORDER BY id ASC LIMIT {4}
             )
             SELECT MAX(id), COUNT(id) FROM ids
             """.format(
-                self.table_name, self.history_table_name, self.last_converted_id, limit
+                self.id_column,
+                self.table_name,
+                self.history_table_name,
+                self.last_converted_id,
+                limit,
             )
         )
         logging.info(f"Executing {query}")
@@ -145,26 +151,27 @@ class HistoryModelDataConverter:
                 version, key, data, user_info, extra_info
             FROM (
                 (
-                    SELECT {3}.id, '{1}' as table_name, {3}.changed,
-                    COALESCE({3}.version, 0) AS version, jsonb_build_object({2}) as key,
-                    {4} #- '{{change_info}}' #- '{{changed}}' as data,
-                    {3}.change_info #- '{{extra}}' as user_info,
-                    COALESCE({3}.change_info->'extra', '{{}}')::jsonb as extra_info {5}
-                    WHERE {3}.id > {11} AND {3}.id <= {12}
+                    SELECT {4}.{2}, '{1}' as table_name, {4}.changed,
+                    COALESCE({4}.version, 0) AS version, jsonb_build_object({3}) as key,
+                    {5} #- '{{change_info}}' #- '{{changed}}' as data,
+                    {4}.change_info #- '{{extra}}' as user_info,
+                    COALESCE({4}.change_info->'extra', '{{}}')::jsonb as extra_info {6}
+                    WHERE {4}.{2} > {12} AND {4}.{2} <= {13}
                 )
                 UNION
                 (
-                    SELECT {1}.id, '{1}' as table_name, {10} as changed,
-                    COALESCE({6}, 0) as version, jsonb_build_object({7}) as key,
-                    {8} #- '{{change_info}}' #- '{{changed}}' as data, '{{}}'::jsonb as user_info,
-                    '{{}}'::jsonb as extra_info {9} WHERE {1}.id > {11} AND {1}.id <= {12}
+                    SELECT {1}.{2}, '{1}' as table_name, {11} as changed,
+                    COALESCE({7}, 0) as version, jsonb_build_object({8}) as key,
+                    {9} #- '{{change_info}}' #- '{{changed}}' as data, '{{}}'::jsonb as user_info,
+                    '{{}}'::jsonb as extra_info {10} WHERE {1}.{2} > {12} AND {1}.{2} <= {13}
                 )
-                ORDER BY id ASC
+                ORDER BY {2} ASC
             ) source
             """
             ).format(
                 self.activity_table,
                 self.table_name,
+                self.id_column,
                 self.history_pk_obj_partial,
                 self.history_table_name,
                 self.history_row_json_partial,
@@ -209,25 +216,26 @@ class HistoryModelDataConverter:
                 version, key, data, user_info, extra_info
             FROM (
                 (
-                    SELECT {3}.id, '{1}' as table_name, {3}.changed,
-                    COALESCE({3}.version, 0) AS version, jsonb_build_object({2}) as key,
-                    {4} - 'change_info'::text - 'changed'::text as data,
-                    {3}.change_info - 'extra'::text as user_info,
-                    COALESCE({3}.change_info->'extra', '{{}}')::jsonb as extra_info {5}
+                    SELECT {4}.{2}, '{1}' as table_name, {4}.changed,
+                    COALESCE({4}.version, 0) AS version, jsonb_build_object({3}) as key,
+                    {5} - 'change_info'::text - 'changed'::text as data,
+                    {4}.change_info - 'extra'::text as user_info,
+                    COALESCE({4}.change_info->'extra', '{{}}')::jsonb as extra_info {6}
                 )
                 UNION
                 (
-                    SELECT {1}.id, '{1}' as table_name, {10} as changed,
-                    COALESCE({6}, 0) as version, jsonb_build_object({7}) as key,
-                    {8} - 'change_info'::text - 'changed'::text as data, '{{}}'::jsonb as user_info,
-                    '{{}}'::jsonb as extra_info {9}
+                    SELECT {1}.{2}, '{1}' as table_name, {11} as changed,
+                    COALESCE({7}, 0) as version, jsonb_build_object({8}) as key,
+                    {9} - 'change_info'::text - 'changed'::text as data, '{{}}'::jsonb as user_info,
+                    '{{}}'::jsonb as extra_info {10}
                 )
-                ORDER BY id ASC
+                ORDER BY {2} ASC
             ) source
             """
             ).format(
                 self.activity_table,
                 self.table_name,
+                self.id_column,
                 self.history_pk_obj_partial,
                 self.history_table_name,
                 self.history_row_json_partial,
@@ -242,3 +250,93 @@ class HistoryModelDataConverter:
         logging.info(f"Executing {query}")
         session.execute(query)
         session.commit()
+
+    def update(self, session):
+        """
+        Updates new objects from legacy history table model to the single table model.
+        Finds new objects and changes made to existing objects and applies the diff to the
+        single table history.
+
+        Use this script if converting large amounts of data while requiring minimal downtime.
+        In this case, the scenario should be:
+        1. Run a migration to create the `chrononaut_activity` table and its index.
+        2. Run `convert` / `convert_all` operations on all your tables
+        3. Initiate downtime
+        4. Run `update` on all your tables
+        5. Migrate your code to use the new model and resume functioning.
+
+        This is the multi-step minimal-downtime approach. Can be run multiple times.
+
+        Returns the number of converted objects.
+        """
+
+        # Get the last change
+        query = text(
+            "SELECT MAX(changed) FROM {0} WHERE table_name = '{1}'".format(
+                self.activity_table, self.table_name
+            )
+        )
+        logging.info(f"Executing {query}")
+        result = session.execute(query).first()
+        last_change = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(0))
+        if result and result[0]:
+            last_change = result[0]
+
+        # Copy changed records from the history table converting to snapshot format
+        # adding the current state from the parent table converting to snapshot format
+        # Seting `changed` timestamps and `change_info` to reflect snapshot creation
+        query = text(
+            (
+                """
+            INSERT INTO {0}(table_name, changed, version, key, data, user_info, extra_info)
+            SELECT update.table_name, update.changed, update.version, update.key, update.data,
+                update.user_info, update.extra_info
+            FROM (
+                SELECT table_name,
+                    LAG(changed) OVER (PARTITION BY key ORDER BY version) AS changed,
+                    version, key, data, user_info, extra_info
+                FROM (
+                    (
+                        SELECT {4}.{2}, '{1}' as table_name, {4}.changed,
+                        COALESCE({4}.version, 0) AS version, jsonb_build_object({3}) as key,
+                        {5} #- '{{change_info}}' #- '{{changed}}' as data,
+                        {4}.change_info #- '{{extra}}' as user_info,
+                        COALESCE({4}.change_info->'extra', '{{}}')::jsonb as extra_info {6}
+                        WHERE {4}.changed > '{12}'
+                    )
+                    UNION
+                    (
+                        SELECT {1}.{2}, '{1}' as table_name, {11} as changed,
+                        COALESCE({7}, 0) as version, jsonb_build_object({8}) as key,
+                        {9} #- '{{change_info}}' #- '{{changed}}' as data,
+                        '{{}}'::jsonb as user_info, '{{}}'::jsonb as extra_info {10}
+                    )
+                    ORDER BY {2} ASC
+                ) source
+            ) update
+            WHERE update.changed IS NOT NULL
+            """
+            ).format(
+                self.activity_table,
+                self.table_name,
+                self.id_column,
+                self.history_pk_obj_partial,
+                self.history_table_name,
+                self.history_row_json_partial,
+                self.history_from_query_partial,
+                self.version_partial,
+                self.pk_obj_partial,
+                self.row_json_partial,
+                self.from_query_partial,
+                self.created_at_partial or "current_timestamp",
+                last_change,
+            )
+        )
+        logging.info(f"Executing {query}")
+        result = session.execute(query)
+        session.commit()
+
+        # Append the new records
+        res = 1
+        while res > 0:
+            res = self.convert(session)
