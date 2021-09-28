@@ -154,7 +154,7 @@ class HistoryModelDataConverter:
                     SELECT {4}.{2}, '{1}' as table_name, {4}.changed,
                     COALESCE({4}.version, 0) AS version, jsonb_build_object({3}) as key,
                     {5} #- '{{change_info}}' #- '{{changed}}' as data,
-                    {4}.change_info #- '{{extra}}' as user_info,
+                    COALESCE({4}.change_info #- '{{extra}}', '{{}}')::jsonb as user_info,
                     COALESCE({4}.change_info->'extra', '{{}}')::jsonb as extra_info {6}
                     WHERE {4}.{2} > {12} AND {4}.{2} <= {13}
                 )
@@ -219,7 +219,7 @@ class HistoryModelDataConverter:
                     SELECT {4}.{2}, '{1}' as table_name, {4}.changed,
                     COALESCE({4}.version, 0) AS version, jsonb_build_object({3}) as key,
                     {5} - 'change_info'::text - 'changed'::text as data,
-                    {4}.change_info - 'extra'::text as user_info,
+                    COALESCE({4}.change_info - 'extra'::text, '{{}}')::jsonb as user_info,
                     COALESCE({4}.change_info->'extra', '{{}}')::jsonb as extra_info {6}
                 )
                 UNION
@@ -251,18 +251,23 @@ class HistoryModelDataConverter:
         session.execute(query)
         session.commit()
 
-    def update(self, session):
+    def update(self, session, update_from=None):
         """
         Updates new objects from legacy history table model to the single table model.
         Finds new objects and changes made to existing objects and applies the diff to the
         single table history.
+        If provided, `update_from` signifies point in time where the converter should begin
+        looking for new or changed objects. Set it to the starting point of the conversion
+        if performing multi-step conversion. If it's not set, this method tries to find the
+        last change in the existing `chrononaut_activity` table or sets it to unix 0 if that
+        fails.
 
         Use this script if converting large amounts of data while requiring minimal downtime.
         In this case, the scenario should be:
         1. Run a migration to create the `chrononaut_activity` table and its index.
-        2. Run `convert` / `convert_all` operations on all your tables
-        3. Initiate downtime
-        4. Run `update` on all your tables
+        2. Run `convert` / `convert_all` operations on all your tables, mark down start timestamp.
+        3. Initiate downtime.
+        4. Run `update` on all your tables providing proper timestamp.
         5. Migrate your code to use the new model and resume functioning.
 
         This is the multi-step minimal-downtime approach. Can be run multiple times.
@@ -276,11 +281,12 @@ class HistoryModelDataConverter:
                 self.activity_table, self.table_name
             )
         )
-        logging.info(f"Executing {query}")
-        result = session.execute(query).first()
-        last_change = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(0))
-        if result and result[0]:
-            last_change = result[0]
+        if not update_from:
+            logging.info(f"Executing {query}")
+            result = session.execute(query).first()
+            update_from = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(0))
+            if result and result[0]:
+                update_from = result[0]
 
         # Copy changed records from the history table converting to snapshot format
         # adding the current state from the parent table converting to snapshot format
@@ -300,7 +306,7 @@ class HistoryModelDataConverter:
                         SELECT {4}.{2}, '{1}' as table_name, {4}.changed,
                         COALESCE({4}.version, 0) AS version, jsonb_build_object({3}) as key,
                         {5} #- '{{change_info}}' #- '{{changed}}' as data,
-                        {4}.change_info #- '{{extra}}' as user_info,
+                        COALESCE({4}.change_info #- '{{extra}}', '{{}}')::jsonb as user_info,
                         COALESCE({4}.change_info->'extra', '{{}}')::jsonb as extra_info {6}
                         WHERE {4}.changed > '{12}'
                     )
@@ -329,7 +335,7 @@ class HistoryModelDataConverter:
                 self.row_json_partial,
                 self.from_query_partial,
                 self.created_at_partial or "current_timestamp",
-                last_change,
+                update_from,
             )
         )
         logging.info(f"Executing {query}")
