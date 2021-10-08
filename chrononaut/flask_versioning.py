@@ -107,19 +107,12 @@ def chrononaut_snapshot_to_model(model, activity_obj):
     untracked_cols = set(getattr(model, "__chrononaut_untracked__", []))
     hidden_cols = set(getattr(model, "__chrononaut_hidden__", []))
 
-    return HistorySnapshot(
-        activity_obj.key,
-        activity_obj.data,
-        activity_obj.table_name,
-        activity_obj.changed,
-        activity_obj.user_info,
-        activity_obj.extra_info,
-        untracked_cols,
-        hidden_cols,
-    )
+    return HistorySnapshot(activity_obj, untracked_cols, hidden_cols)
 
 
 def create_version(obj, session, created=False, deleted=False):
+    if hasattr(g, "__suppress_versioning__"):
+        return
     obj_mapper = object_mapper(obj)
     attrs, changed_cols = model_to_chrononaut_snapshot(obj, obj_mapper)
 

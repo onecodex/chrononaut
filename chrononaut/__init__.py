@@ -9,6 +9,7 @@
 
 import sqlalchemy
 from sqlalchemy import event
+from flask import g
 from flask_sqlalchemy import SignallingSession, SQLAlchemy
 
 
@@ -22,7 +23,7 @@ from chrononaut.context_managers import append_change_info, extra_change_info, r
 from chrononaut.exceptions import ChrononautException
 from chrononaut.flask_versioning import create_version
 from chrononaut.versioned import Versioned
-from chrononaut.models import activity_factory
+from chrononaut.models import HistorySnapshot, activity_factory
 
 
 def versioned_objects(items):
@@ -48,7 +49,11 @@ def versioned_session(session):
                 append_recorded_changes(obj, session)
 
         for obj in session.deleted:
-            if hasattr(obj, "__versioned__"):
+            if hasattr(obj, "__chrononaut_version__") and not hasattr(
+                g, "__allow_deleting_history__"
+            ):
+                raise ChrononautException("Cannot commit version removal")
+            elif hasattr(obj, "__versioned__"):
                 create_version(obj, session, deleted=True)
 
     @event.listens_for(session, "after_flush")
@@ -64,7 +69,13 @@ class VersionedSignallingSession(SignallingSession):
     versioned and change info session information.
     """
 
-    pass
+    def delete(self, instance):
+        if isinstance(instance, HistorySnapshot):
+            if not hasattr(g, "__allow_deleting_history__"):
+                raise ChrononautException("Cannot remove version info")
+            super().delete(instance._activity_obj)
+        else:
+            super().delete(instance)
 
 
 versioned_session(VersionedSignallingSession)

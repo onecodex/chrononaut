@@ -97,7 +97,9 @@ def test_delete_tracking(db, session):
     session.commit()
     session.delete(todo)
     session.commit()
+    # 1 for insert, 1 for delete
     assert len(todo.versions()) == 2
+    assert [v.version for v in todo.versions()] == [0, 1]
 
 
 def test_versioning_enum_columns(db, session):

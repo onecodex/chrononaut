@@ -1,7 +1,6 @@
 from sqlalchemy.sql.expression import text
 from chrononaut.versioned import Versioned
 from chrononaut.exceptions import ChrononautException
-import logging
 import time
 
 
@@ -103,7 +102,6 @@ class HistoryModelDataConverter:
                     self.id_column, self.activity_table, self.table_name
                 )
             )
-            logging.info(f"Executing {query}")
             result = session.execute(query).first()
             if result and result[0]:
                 self.last_converted_id = result[0]
@@ -128,7 +126,6 @@ class HistoryModelDataConverter:
                 limit,
             )
         )
-        logging.info(f"Executing {query}")
         result = session.execute(query).first()
         if not result or not result[0]:
             # No ids left to convert
@@ -185,7 +182,6 @@ class HistoryModelDataConverter:
                 id_upper_bound,
             )
         )
-        logging.info(f"Executing {query}")
         result = session.execute(query)
         session.commit()
 
@@ -247,7 +243,6 @@ class HistoryModelDataConverter:
                 self.created_at_partial or "current_timestamp",
             )
         )
-        logging.info(f"Executing {query}")
         session.execute(query)
         session.commit()
 
@@ -282,7 +277,6 @@ class HistoryModelDataConverter:
             )
         )
         if not update_from:
-            logging.info(f"Executing {query}")
             result = session.execute(query).first()
             update_from = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(0))
             if result and result[0]:
@@ -338,7 +332,6 @@ class HistoryModelDataConverter:
                 update_from,
             )
         )
-        logging.info(f"Executing {query}")
         result = session.execute(query)
         session.commit()
 

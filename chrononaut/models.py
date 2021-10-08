@@ -7,6 +7,7 @@ def activity_factory(Base, schema=None):
     class ActivityBase(Base):
         __table_args__ = {"schema": schema}
         __tablename__ = "chrononaut_activity"
+        __chrononaut_version__ = {}
 
         id = sa.Column(sa.BigInteger, primary_key=True)
         table_name = sa.Column(sa.Text, nullable=False)
@@ -27,19 +28,18 @@ class HistorySnapshot(object):
     __initialized__ = False
     __eq_attrs__ = {"_key", "_data", "_untracked", "_hidden", "chrononaut_meta"}
 
-    def __init__(
-        self, key, data, table_name, changed, user_info, extra_info, untracked=None, hidden=None
-    ):
-        self._key = key
-        self._data = data
+    def __init__(self, activity_obj, untracked=None, hidden=None):
+        self._key = activity_obj.key
+        self._data = activity_obj.data
         self.chrononaut_meta = {
-            "table_name": table_name,
-            "changed": changed,
-            "user_info": user_info,
-            "extra_info": extra_info,
+            "table_name": activity_obj.table_name,
+            "changed": activity_obj.changed,
+            "user_info": activity_obj.user_info,
+            "extra_info": activity_obj.extra_info,
         }
         self._untracked = untracked if untracked else []
         self._hidden = hidden if hidden else []
+        self._activity_obj = activity_obj
         self.__initialized__ = True
 
     def __getattr__(self, name):

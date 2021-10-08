@@ -112,6 +112,32 @@ We recommend migrating to the new version of Chrononaut in three steps:
 .. warning:: Migrating the history data is non-reversible. Double check the generated Alembic migration script and migrate your data, otherwise it may be lost!
 
 
+Suppressing versioning
+----------------------
+You may disable tracing version info for selected operations by using ``suppress_versioning`` context block::
+
+    from chrononaut.unsafe import suppress_versioning
+
+    with suppress_versioning():
+        obj.modify()
+        session.commit()
+
+This will prevent tracing all insert, update and delete operations performed within this block. If needed, you
+may also remove select history records by passing in a flag to the context block, e.g. to remove an object along
+with all its history info::
+
+    from chrononaut.unsafe import suppress_versioning
+
+    with suppress_versioning(allow_deleting_history=True):
+        for version in obj.versions():
+            session.delete(version)
+        session.delete(obj)
+        session.commit()
+
+Those operations will lead to loss of information and may lead to inconsistent database state, so don't use them.
+If really needed, excercise extreme caution.
+
+
 Known issues
 ------------
 Adding a column to an already existing Primary Key on a table will make the historic versions of an object
