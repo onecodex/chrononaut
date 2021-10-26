@@ -175,36 +175,16 @@ class Versioned(ChangeInfoMixin):
 
         from_model = self.version_at(from_timestamp)
         to_model = self.version_at(to_timestamp)
+        hidden = getattr(self, "__chrononaut_hidden__", [])
         diff = {}
 
         if not from_model and not to_model:
             return diff
         elif not from_model:
             to_dict = to_model._data
-            diff = {k: (None, to_dict[k]) for k in to_dict.keys()}
+            diff = {k: (None, to_dict[k]) for k in to_dict.keys() if k not in hidden}
         else:
-            from_dict = from_model._data
-            to_dict = to_model._data
-
-            # Exit early if we are comparing object with itself
-            if from_model.version == to_model.version:
-                return {}
-
-            hidden_cols = set(getattr(self, "__chrononaut_hidden__", []))
-            all_keys = set(from_dict.keys())
-            all_keys.update(to_dict.keys())
-            all_keys = all_keys.difference(hidden_cols)
-
-            diff = {}
-            for k in all_keys:
-                if k in from_dict and k not in to_dict:
-                    diff[k] = (from_dict[k], None)
-                elif k not in from_dict and k in to_dict:
-                    diff[k] = (None, to_dict[k])
-                else:
-                    # it's in both
-                    if from_dict[k] != to_dict[k]:
-                        diff[k] = (from_dict[k], to_dict[k])
+            diff = from_model.diff(to_model)
 
         # If `include_hidden` we need to enumerate through every
         # model *since* the from_timestamp *until* the to_timestamp

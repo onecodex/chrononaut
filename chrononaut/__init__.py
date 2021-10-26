@@ -22,6 +22,7 @@ from chrononaut.change_info import (
 from chrononaut.context_managers import append_change_info, extra_change_info, rationale
 from chrononaut.exceptions import ChrononautException
 from chrononaut.flask_versioning import create_version
+from chrononaut.flask_versioning import is_modified
 from chrononaut.versioned import Versioned
 from chrononaut.models import HistorySnapshot, activity_factory
 
@@ -43,8 +44,9 @@ def versioned_session(session):
                 increment_version_on_insert(obj)
 
         for obj in session.dirty:
-            if hasattr(obj, "__versioned__"):
-                create_version(obj, session)
+            if hasattr(obj, "__versioned__") and is_modified(obj):
+                # Objects cannot be updated in the `after_flush` step hence bumping the version here
+                obj.version = obj.version + 1
             if hasattr(obj, "__chrononaut_record_change_info__"):
                 append_recorded_changes(obj, session)
 
@@ -54,6 +56,7 @@ def versioned_session(session):
             ):
                 raise ChrononautException("Cannot commit version removal")
             elif hasattr(obj, "__versioned__"):
+                obj.version = obj.version + 1
                 create_version(obj, session, deleted=True)
 
     @event.listens_for(session, "after_flush")
@@ -62,6 +65,10 @@ def versioned_session(session):
         for obj in session.new:
             if hasattr(obj, "__versioned__"):
                 create_version(obj, session, created=True)
+        # Tracking updates in `after_flush` due to foreign keys being only set during flush
+        for obj in session.dirty:
+            if hasattr(obj, "__versioned__"):
+                create_version(obj, session)
 
 
 class VersionedSignallingSession(SignallingSession):

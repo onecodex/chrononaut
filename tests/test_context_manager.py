@@ -67,6 +67,7 @@ def test_strict_session(db, session, strict_session):
     with pytest.raises(chrononaut.exceptions.ChrononautException):
         todo.title = "Updated"
         session.commit()
+    session.rollback()
 
     # Unless wrapped in extra_change_info
     with extra_change_info(reason="Because I wanted to edit this record!"):

@@ -31,9 +31,7 @@ def app(request):
     )
     ctx = app.app_context()
     ctx.push()
-
     yield app
-
     ctx.pop()
 
 
@@ -191,7 +189,7 @@ def generate_test_models(db):
     return Todo, UnversionedTodo, SpecialTodo, Report, User, Role, ChangeLog, Priority
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="function", autouse=True)
 def session(db, request):
     """Creates a new database session for a test."""
     connection = db.engine.connect()
@@ -230,20 +228,22 @@ def security_app(app, db):
 
 
 @pytest.fixture(scope="function")
-def app_client(security_app, session, db):
-    user = security_app.security.datastore.create_user(
-        email="test@example.com", password="password", active=True
-    )
+def app_client(security_app):
+    yield security_app.test_client(use_cookies=True)
+
+
+@pytest.fixture
+def user(db, session):
+    user = db.User(email="test@example.com", password="password", active=True)
     role = db.Role(name="Admin")
     session.add(user)
     session.add(role)
     session.commit()
-    client = security_app.test_client(use_cookies=True)
-    return client
+    yield user
 
 
 @pytest.fixture(scope="function")
-def anonymous_user(session, db, app_client):
+def anonymous_user(app_client):
     with app_client:
         app_client.post("/login")
         assert not hasattr(flask_security.current_user, "email")
@@ -251,11 +251,13 @@ def anonymous_user(session, db, app_client):
 
 
 @pytest.fixture(scope="function")
-def logged_in_user(session, db, app_client):
-    user = db.User.query.first()
-    with app_client:
-        # Note we have no routes, so 404s if follow_redirects=True
-        response = app_client.post("/login", data={"email": user.email, "password": "password"})
-        assert response.status_code == 302
-        assert flask_security.current_user == user
+def logged_in_user(app, user):
+    with app.test_request_context(environ_base={"REMOTE_ADDR": "10.0.0.1"}):
+        original = app.login_manager._load_user_from_request
+
+        def _load_user_from_request(request):
+            return user
+
+        app.login_manager._load_user_from_request = _load_user_from_request
         yield user
+        app.login_manager._load_user_from_request = original

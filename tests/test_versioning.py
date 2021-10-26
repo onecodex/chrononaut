@@ -175,7 +175,6 @@ def test_hidden_columns(db, session):
 
     # Assert that change info is included for the hidden column
     prior_todo = todo.versions()[1]
-    print(prior_todo.chrononaut_meta["extra_info"]["hidden_cols_changed"])
     assert set(prior_todo.chrononaut_meta["extra_info"]["hidden_cols_changed"]) == {"done"}
 
     # Assert multiple columns are tracked
@@ -210,16 +209,46 @@ def test_versioning_relationships(db, session, logged_in_user):
     user.primary_role = role
     session.commit()
 
+    assert len(user.versions()) == 3
+
     # Relationships are *not* currently versioned, but IDs are
     assert user.versions()[0]._data.get("roles") is None
 
     # But other relationships work via the foreign key column
     assert user.primary_role == role
     assert user.versions()[0]._data.get("primary_role_id") is None
+    assert user.versions()[-1]._data.get("primary_role_id") == role.id
 
-    # But not the relationship itself
+    # Relationship isn't lost over other changes
+    user.email = "different_altogether@example.com"
+    session.commit()
+
+    assert user.versions()[-1]._data.get("primary_role_id") == role.id
+
+    # Test changing only the user role with transient object as relation
+    new_role = db.Role(name="Actor")
+    session.add(new_role)
+    user.primary_role = new_role
+    session.commit()
+
+    assert user.versions()[-1]._data.get("primary_role_id") == new_role.id
+
+    # But the relationship itself isn't saved
     with pytest.raises(AttributeError):
         user.previous_version().primary_role
+
+
+def test_versioning_relationship_ignore_many_to_many(db, session, logged_in_user):
+    user = db.User.query.first()
+    new_role = db.Role(name="Intern")
+    version_count = len(user.versions())
+    assert version_count == 1
+
+    user.roles.append(new_role)
+    session.commit()
+
+    # User should not have a new version created even though a property changed
+    assert len(user.versions()) == version_count
 
 
 def test_version_fetching_and_diffing(db, session):

@@ -39,7 +39,7 @@ def test_change_info(db, session, logged_in_user):
     assert len(todo.versions()) == 2
     prior_todo = todo.versions()[1]
     assert prior_todo.chrononaut_meta["user_info"]["user_id"] == "test@example.com"
-    assert prior_todo.chrononaut_meta["user_info"]["remote_addr"] == "127.0.0.1"
+    assert prior_todo.chrononaut_meta["user_info"]["remote_addr"] == "10.0.0.1"
     assert not prior_todo.chrononaut_meta["extra_info"]
 
 
@@ -62,10 +62,8 @@ def test_change_info_mixin(db, session, logged_in_user):
         session.add(note)
         session.commit()
     assert note.change_info["user_id"] == "test@example.com"
-    assert note.change_info["remote_addr"] == "127.0.0.1"
+    assert note.change_info["remote_addr"] == "10.0.0.1"
     assert (datetime.now(UTC) - note.changed).total_seconds() < 1
-    print([str(x) for x in note.versions()])
-    print(str(note.version_at(datetime.now(UTC), return_snapshot=True)))
     assert note.version == 0
     assert note.versions() == [note.version_at(datetime.now(UTC))]
 
