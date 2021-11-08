@@ -160,6 +160,7 @@ def chrononaut_snapshot_to_model(model, activity_obj):
 def create_version(obj, session, created=False, deleted=False):
     if hasattr(g, "__suppress_versioning__"):
         return
+
     state = inspect(obj)
     changed_attrs = _get_dirty_attributes(obj, state)
 

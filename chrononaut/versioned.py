@@ -102,7 +102,7 @@ class Versioned(ChangeInfoMixin):
 
         # Order by the version
         if ordered:
-            query = query.order_by(activity.version)
+            query = query.order_by(activity.changed)
 
         if return_query:
             return query
@@ -118,7 +118,7 @@ class Versioned(ChangeInfoMixin):
         """
         query = self.versions(before=at, ordered=False, return_query=True)
         activity = self.metadata._activity_cls
-        history_model = query.order_by(activity.version.desc()).first()
+        history_model = query.order_by(activity.changed.desc()).first()
 
         if history_model is None:
             return None
@@ -150,7 +150,7 @@ class Versioned(ChangeInfoMixin):
         query = self.versions(ordered=False, return_query=True)
         activity = self.metadata._activity_cls
         history_model = (
-            query.filter(activity.version < self.version).order_by(activity.version.desc()).first()
+            query.filter(activity.version < self.version).order_by(activity.changed.desc()).first()
         )
         return chrononaut_snapshot_to_model(self, history_model) if history_model else None
 

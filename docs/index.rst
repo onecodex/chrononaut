@@ -104,6 +104,27 @@ If you want to convert your historic data, there is a ``chrononaut.data_converte
 which you can use to convert all the required models. The conversion script may be run multiple times - and it's the
 recommended approach, run the script until it returns 0 (records converted) for each data model tyou want to convert.
 
+Example uses:
+```
+from chrononaut.data_converters import HistoryModelDataConverter
+
+# convert all records from a versioned `User` model with a non-standard `uuid` id column:
+converter = HistoryModelDataConverter(User, id_column="uuid")
+converter.convert_all(db.session)
+
+# convert all records from a versioned `Transfer` model in a "chunked" mode (useful e.g. if
+# a table has millions of rows which slow down a query)
+converter = HistoryModelDataConverter(Transfer)
+res = 1
+while res > 0:
+    res = converter.convert(db.session)
+
+# convert data that may have been inserted in the old model after the initial conversion
+# (e.g. if migrating a live system)
+converter = HistoryModelDataConverter(Transfer)
+converter.update(db.session, update_from="timestamp-of-initial-conversion")
+```
+
 We recommend migrating to the new version of Chrononaut in three steps:
 * generate the migration to create the new ``chrononaut_activity`` table and indexes while removing drop table operations for ``*_history`` tables,
 * convert the data in whatever way that's convenient,

@@ -4,4 +4,31 @@
 
 A history mixin with audit logging, record locking, and time travel (!) for PostgreSQL and Flask-SQLAlchemy. Requires Flask-SQLAlchemy >= 2.2. See [the documentation](https://chrononaut.readthedocs.io/) for more details. Development and all PRs should pass tests and linting on Github Actions, including use of [`pre-commit`](https://pre-commit.com) for automated linting with `flake8` and `black`.
 
+## Migrating from 0.1 to 0.2
+If using Alembic, database schema migration will be detected automatically.
+In other cases please look at the table located in `activity_factory` function in `models.py` file.
+Note that you should keep the old `*_history` tables if you with to migrate the data as well.
+
+In order to migrate data from the old model, use the `HistoryModelDataConverter` model.
+Example uses:
+```python
+from chrononaut.data_converters import HistoryModelDataConverter
+
+# convert all records from a versioned `User` model with a non-standard `uuid` id column:
+converter = HistoryModelDataConverter(User, id_column="uuid")
+converter.convert_all(db.session)
+
+# convert all records from a versioned `Transfer` model in a "chunked" mode (useful e.g. if
+# a table has millions of rows which slow down a query)
+converter = HistoryModelDataConverter(Transfer)
+res = 1
+while res > 0:
+    res = converter.convert(db.session)
+
+# convert data that may have been inserted in the old model after the initial conversion
+# (e.g. if migrating a live system)
+converter = HistoryModelDataConverter(Transfer)
+converter.update(db.session, update_from="timestamp-of-initial-conversion")
+```
+
 > _Note: Future plans include extending supporting for SQLAlchemy more generally and across multiple databases._
