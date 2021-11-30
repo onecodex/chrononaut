@@ -7,8 +7,7 @@ import chrononaut
 
 
 def test_unversioned_db_fixture(unversioned_db):
-    """Test unversioned SQLAlchemy object.
-    """
+    """Test unversioned SQLAlchemy object."""
     assert unversioned_db.__class__ == flask_sqlalchemy.SQLAlchemy
     assert unversioned_db.session.__class__ == sqlalchemy.orm.scoping.scoped_session
     assert (
@@ -18,8 +17,7 @@ def test_unversioned_db_fixture(unversioned_db):
 
 
 def test_db_fixture(db):
-    """Test fixtures.
-    """
+    """Test fixtures."""
     assert db.__class__ == chrononaut.VersionedSQLAlchemy
     assert db.session.__class__ == sqlalchemy.orm.scoping.scoped_session
     assert (
@@ -29,8 +27,7 @@ def test_db_fixture(db):
 
 
 def test_unversioned_todo(db):
-    """Test unversioned class.
-    """
+    """Test unversioned class."""
     todo = db.UnversionedTodo("Task 0", "Testing...")
     assert todo.__class__ == db.UnversionedTodo
 
@@ -40,18 +37,13 @@ def test_table_names(db, session):
     including custom `__chrononaut_tablename__` settings
     """
     assert set(db.metadata.tables.keys()) == {  # noqa
+        "chrononaut_activity",
         "report",
-        "rep_history",
         "todos",
-        "todos_history",
         "unversioned_todos",
         "special_todo",
-        "special_todo_history",
         "appuser",
-        "appuser_history",
         "role",
-        "role_history",
         "roles_users",
         "change_log",
-        "change_log_history",
     }

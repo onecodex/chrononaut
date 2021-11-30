@@ -7,15 +7,26 @@
 adding support for audit logging, record locking, and time travel!
 """
 from setuptools import setup, find_packages
+import sys
 
-__version__ = "0.2.4"
+__version__ = "2.0.0"
+
+
+if sys.version_info[0] < 3:
+    sys.stderr.write("Requires Python 3 or up\n")
+    sys.exit(1)
 
 
 setup(
     name="chrononaut",
     version=__version__,  # noqa
     packages=find_packages(exclude=["*test*"]),
-    install_requires=["Flask>=0.12", "Flask-SQLAlchemy>=2.2", "pytz>=2017.2", "psycopg2>=2.7.1"],
+    install_requires=[
+        "Flask>=1.1.2",
+        "Flask-SQLAlchemy>=2.5.1",
+        "SQLAlchemy>=1.4.0",
+        "psycopg2>=2.7.1",
+    ],
     extras_require={"user_info": ["Flask-Login>=0.4.0"]},
     include_package_data=True,
     zip_safe=False,
@@ -34,14 +45,11 @@ setup(
         "Topic :: Internet :: WWW/HTTP",
         "Framework :: Flask",
         "Programming Language :: Python",
-        "Programming Language :: Python :: 2",
-        "Programming Language :: Python :: 2.6",
-        "Programming Language :: Python :: 2.7",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.3",
-        "Programming Language :: Python :: 3.4",
-        "Programming Language :: Python :: 3.5",
-        "Programming Language :: Python :: 3.6",
+        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
     ],
     test_suite="tests",
     setup_requires=["pytest-runner"],

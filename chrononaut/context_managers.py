@@ -18,22 +18,18 @@ def extra_change_info(**kwargs):
             db.session.commit()
 
     Note that the ``db.session.commit()`` change needs to occur within the context manager block
-    for additional fields to get injected into the history table ``change_info`` JSON within
-    an ``extra`` info field. Any number of keyword arguments with string values are supported.
+    for additional fields to get injected into the history table ``extra_info`` JSON.
+    Any number of keyword arguments with string values are supported.
 
-    The above example yields a ``change_info`` like the following::
+    The above example yields a ``extra_info`` like the following::
 
         {
-            "user_id": "admin@example.com",
-            "remote_addr": "127.0.0.1",
-            "extra": {
-                "change_rationale": "User request"
-            }
+            "change_rationale": "User request"
         }
     """
     if _app_ctx_stack.top is None:
         raise ChrononautException("Can only use `extra_change_info` in a Flask app context.")
-    setattr(g, "__version_extra_change_info__", kwargs)
+    g.__version_extra_change_info__ = kwargs
     yield
     delattr(g, "__version_extra_change_info__")
 
@@ -49,14 +45,10 @@ def rationale(rationale):
             user.email = 'updated@example.com'
             db.session.commit()
 
-    This would yield a ``change_info`` like the following::
+    This would yield a ``extra_info`` like the following::
 
         {
-            "user_id": "admin@example.com",
-            "remote_addr": "127.0.0.1",
-            "extra": {
-                "rationale": "Updating per user request, see GH #1732"
-            }
+            "rationale": "Updating per user request, see GH #1732"
         }
     """
     with extra_change_info(rationale=rationale):
@@ -82,7 +74,7 @@ def append_change_info(obj, **kwargs):
     if _app_ctx_stack.top is None:
         raise ChrononautException("Can only use `append_change_info` in a Flask app context.")
 
-    if not hasattr(obj, "versions"):
+    if not hasattr(obj, "__versioned__"):
         raise ChrononautException("Cannot append_change_info to an object that is not Versioned.")
 
     obj.__CHRONONAUT_RECORDED_CHANGES__ = {}

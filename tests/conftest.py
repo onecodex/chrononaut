@@ -1,46 +1,50 @@
 from datetime import datetime
 import os
+from enum import Enum
 
 import flask
 import flask_security
 import flask_sqlalchemy
 import sqlalchemy
+import random
+import string
 
 import chrononaut
 
 import pytest
 
 
-@pytest.yield_fixture(scope="session")
+@pytest.fixture(scope="session")
 def app(request):
     app = flask.Flask(__name__)
     app.config["TESTING"] = True
     app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
-        "SQLALCHEMY_DATABASE_URI", "postgres://postgres@localhost/chrononaut_test"
+        "SQLALCHEMY_DATABASE_URI", "postgresql://postgres@localhost/chrononaut_test"
     )
     app.config["SECRET_KEY"] = "+BU9wMx=xvD\\YV"
     app.config["LOGIN_DISABLED"] = False
     app.config["WTF_CSRF_ENABLED"] = False
+    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    app.config["SECURITY_PASSWORD_SALT"] = "".join(
+        random.choice(string.ascii_uppercase + string.ascii_lowercase + string.digits)
+        for _ in range(8)
+    )
     ctx = app.app_context()
     ctx.push()
-
     yield app
-
     ctx.pop()
 
 
-@pytest.yield_fixture(scope="session")
+@pytest.fixture(scope="session")
 def unversioned_db(app, request):
-    """An unversioned db fixture.
-    """
+    """An unversioned db fixture."""
     db = flask_sqlalchemy.SQLAlchemy(app)
     yield db
 
 
-@pytest.yield_fixture(scope="session")
+@pytest.fixture(scope="session")
 def db(app, request):
-    """A versioned db fixture.
-    """
+    """A versioned db fixture."""
     db = chrononaut.VersionedSQLAlchemy(app)
     models = generate_test_models(db)
     for model in models:
@@ -50,14 +54,14 @@ def db(app, request):
     db.drop_all()
 
 
-@pytest.yield_fixture(scope="function")
+@pytest.fixture(scope="function")
 def strict_session(app, request):
     app.config["CHRONONAUT_REQUIRE_EXTRA_CHANGE_INFO"] = True
     yield
     app.config["CHRONONAUT_REQUIRE_EXTRA_CHANGE_INFO"] = False
 
 
-@pytest.yield_fixture(scope="function")
+@pytest.fixture(scope="function")
 def extra_change_info(app, request):
     app.config["CHRONONAUT_EXTRA_CHANGE_INFO_FUNC"] = lambda: {"extra_field": True}
     yield
@@ -80,6 +84,11 @@ def generate_test_models(db):
             self.done = False
             self.pub_date = datetime.utcnow()
 
+    class Priority(Enum):
+        LOW = "low"
+        MEDIUM = "mid"
+        HIGH = "high"
+
     class Todo(db.Model, chrononaut.Versioned):
         __tablename__ = "todos"
         __chrononaut_hidden__ = ["done"]
@@ -91,16 +100,30 @@ def generate_test_models(db):
         todo_type = db.Column(db.String(16))
         done = db.Column(db.Boolean)
         starred = db.Column(db.Boolean)
-        pub_date = db.Column(db.DateTime, index=True)
+        pub_date = db.Column(db.DateTime(timezone=True), index=True)
+        priority = db.Column(
+            db.Enum(
+                Priority,
+                validate_strings=True,
+                native_enum=False,
+                create_constraint=False,
+                values_callable=lambda x: [e.value for e in x],
+            ),
+            nullable=False,
+            default=Priority.MEDIUM,
+        )
+        created_at = db.Column(db.DateTime(timezone=True), default=sqlalchemy.func.now())
 
         __mapper_args__ = {"polymorphic_identity": "basic", "polymorphic_on": todo_type}
 
-        def __init__(self, title, text):
+        def __init__(self, title, text, preset_id=None):
             self.title = title
             self.text = text
             self.done = False
             self.starred = False
             self.pub_date = datetime.utcnow()
+            if preset_id:
+                self.id = preset_id
 
         @sqlalchemy.orm.validates("todo_type")
         def validate_todo_type(self, k, v):
@@ -152,7 +175,7 @@ def generate_test_models(db):
         email = db.Column(db.String(255), unique=True)
         password = db.Column(db.String(255))
         active = db.Column(db.Boolean())
-        confirmed_at = db.Column(db.DateTime())
+        confirmed_at = db.Column(db.DateTime(timezone=True))
         primary_role_id = db.Column(db.Integer, db.ForeignKey("role.id"))
         primary_role = db.relationship("Role")
         roles = db.relationship(
@@ -163,10 +186,10 @@ def generate_test_models(db):
         id = db.Column(db.Integer, primary_key=True)
         note = db.Column(db.Text)
 
-    return Todo, UnversionedTodo, SpecialTodo, Report, User, Role, ChangeLog
+    return Todo, UnversionedTodo, SpecialTodo, Report, User, Role, ChangeLog, Priority
 
 
-@pytest.yield_fixture(scope="function")
+@pytest.fixture(scope="function", autouse=True)
 def session(db, request):
     """Creates a new database session for a test."""
     connection = db.engine.connect()
@@ -194,7 +217,7 @@ def session(db, request):
     session.remove()
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="session")
 def security_app(app, db):
     sqlalchemy_datastore = flask_security.SQLAlchemyUserDatastore(db, db.User, db.Role)
 
@@ -205,32 +228,36 @@ def security_app(app, db):
 
 
 @pytest.fixture(scope="function")
-def app_client(security_app, session, db):
-    user = security_app.security.datastore.create_user(
-        email="test@example.com", password="password", active=True
-    )
+def app_client(security_app):
+    yield security_app.test_client(use_cookies=True)
+
+
+@pytest.fixture
+def user(db, session):
+    user = db.User(email="test@example.com", password="password", active=True)
     role = db.Role(name="Admin")
     session.add(user)
     session.add(role)
     session.commit()
-    client = security_app.test_client(use_cookies=True)
-    return client
+    yield user
 
 
 @pytest.fixture(scope="function")
-def anonymous_user(session, db, app_client):
+def anonymous_user(app_client):
     with app_client:
         app_client.post("/login")
         assert not hasattr(flask_security.current_user, "email")
         yield flask_security.current_user
 
 
-@pytest.yield_fixture(scope="function")
-def logged_in_user(session, db, app_client):
-    user = db.User.query.first()
-    with app_client:
-        # Note we have no routes, so 404s if follow_redirects=True
-        response = app_client.post("/login", data={"email": user.email, "password": "password"})
-        assert response.status_code == 302
-        assert flask_security.current_user == user
+@pytest.fixture(scope="function")
+def logged_in_user(app, user):
+    with app.test_request_context(environ_base={"REMOTE_ADDR": "10.0.0.1"}):
+        original = app.login_manager._load_user_from_request
+
+        def _load_user_from_request(request):
+            return user
+
+        app.login_manager._load_user_from_request = _load_user_from_request
         yield user
+        app.login_manager._load_user_from_request = original

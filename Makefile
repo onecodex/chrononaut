@@ -1,4 +1,5 @@
 test:
+	psql -U postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'chrononaut_test'" | grep -q 1 || psql -U postgres -c "CREATE DATABASE chrononaut_test"
 	py.test tests/
 	@echo "Successfully passed all tests (one environment only, use tox to full suite)."
 
