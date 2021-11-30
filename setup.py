@@ -9,7 +9,7 @@ adding support for audit logging, record locking, and time travel!
 from setuptools import setup, find_packages
 import sys
 
-__version__ = "2.0.0"
+__version__ = "0.3.0"
 
 
 if sys.version_info[0] < 3:
