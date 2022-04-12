@@ -1,5 +1,6 @@
 from chrononaut.flask_versioning import serialize_datetime, UTC
 from datetime import datetime
+from sqlalchemy import text
 
 import pytest
 import chrononaut
@@ -339,3 +340,22 @@ def test_version_fetching_and_diffing(db, session):
     set(todo.diff(time_0).keys()) == {"text"}
     set(todo.diff(time_0, include_hidden=True).keys()) == {"text", "done"}
     assert todo.diff(time_0, include_hidden=True)["done"] == (None, True)
+
+
+def test_null_version(db, session):
+    """NULL version may be encountered when adding `Versioned` mixin to existing table."""
+    sql = text(open("tests/files/seed_null_version.sql", "r").read())
+    session.execute(sql)
+    session.commit()
+
+    todo = db.Todo.query.get(13)
+    assert todo.versions() == []
+
+    # Update the Task
+    todo.title = "Task 0.1"
+    session.commit()
+
+    # Check old versions
+    prior_todos = todo.versions()
+    assert len(prior_todos) == 1
+    assert prior_todos[0].version == 1

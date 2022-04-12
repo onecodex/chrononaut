@@ -46,7 +46,7 @@ def versioned_session(session):
         for obj in session.dirty:
             if hasattr(obj, "__versioned__") and is_modified(obj):
                 # Objects cannot be updated in the `after_flush` step hence bumping the version here
-                obj.version = obj.version + 1
+                obj.version = obj.version + 1 if obj.version is not None else 1
             if hasattr(obj, "__chrononaut_record_change_info__"):
                 append_recorded_changes(obj, session)
 
@@ -56,7 +56,7 @@ def versioned_session(session):
             ):
                 raise ChrononautException("Cannot commit version removal")
             elif hasattr(obj, "__versioned__"):
-                obj.version = obj.version + 1
+                obj.version = obj.version + 1 if obj.version is not None else 1
                 create_version(obj, session, deleted=True)
 
     @event.listens_for(session, "after_flush")
