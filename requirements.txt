@@ -1,5 +1,5 @@
 # Requirements
-Flask==1.1.2
+Flask==2.1.0
 Flask-SQLAlchemy==2.5.1
 SQLAlchemy==1.4.25
 psycopg2-binary>=2.8.1
@@ -9,9 +9,9 @@ python-dateutil
 
 # Testing & documentation requirements (note these must be installable across all Tox environment)
 pytest>=3.0.7
-codecov
 pytest-cov==2.4.0
 Flask-Security-Fork==2.0.1
+Werkzeug==2.0.0
 sphinx==1.5.5
 sphinx-autobuild==0.6.0
 Flask-Sphinx-Themes==1.0.1

@@ -22,7 +22,7 @@ setup(
     version=__version__,  # noqa
     packages=find_packages(exclude=["*test*"]),
     install_requires=[
-        "Flask>=1.1.2",
+        "Flask>=2.1.0",
         "Flask-SQLAlchemy>=2.5.1",
         "SQLAlchemy>=1.4.0",
         "psycopg2>=2.7.1",
@@ -34,6 +34,7 @@ setup(
     author="Nick Greenfield",
     author_email="opensource@onecodex.com",
     long_description=__doc__,
+    long_description_content_type="text/markdown",
     license="MIT License",
     keywords="Chrononaut",
     url="https://github.com/onecodex/chrononaut",
