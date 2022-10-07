@@ -4,6 +4,7 @@ from sqlalchemy.orm import mapper, object_mapper
 from chrononaut.change_info import ChangeInfoMixin
 from chrononaut.exceptions import ChrononautException
 from chrononaut.history_mapper import extend_mapper
+from chrononaut.models import HistorySnapshot
 from chrononaut.flask_versioning import (
     chrononaut_snapshot_to_model,
     UTC,
@@ -136,7 +137,7 @@ class Versioned(ChangeInfoMixin):
         :return: ``True`` if there have been any changes. ``False`` if not.
         """
         # TODO: this is ambiguous, what if there were 2 changes which cancel each other out?
-        return not len(self.diff(from_timestamp=since)) == 0
+        return not len(self.diff_timestamps(from_timestamp=since)) == 0
 
     def previous_version(self):
         """Fetch the previous version of this model (or None)
@@ -154,38 +155,34 @@ class Versioned(ChangeInfoMixin):
         )
         return chrononaut_snapshot_to_model(self, history_model) if history_model else None
 
-    def diff(self, from_timestamp, to_timestamp=None, include_hidden=False):
-        """Enumerate the changes from a prior model state (at ``from_timestamp``) to a later
-        model state or the current model's state (if ``to_timestamp`` is ``None``).
-
-        :param from_timestamp: A point in time for the model to diff from.
-        :param to_timestamp: A point in time to diff to or ``None`` for current version.
+    def diff(self, from_model, to=None, include_hidden=False):
+        """Enumerate the changes from a provided history snapshot to a later history snapshot or the
+        current model's
+        state (if ``to`` is ``None``).
+        :param from_model: A history snapshot to diff from.
+        :param to: A history snapshot or ``None``.
+        :param include_hidden: Include a hint that a hidden value has changed (without the value
+        itself).
         :return: A dict of column names and ``(from, to)`` value tuples
         """
-        if to_timestamp is None:
-            to_timestamp = datetime.now(UTC)
+        if from_model is not None and not isinstance(from_model, HistorySnapshot):
+            raise ChrononautException("`from_model` needs to be a history snapshot.")
+        if to is None:
+            versions = self.versions()
+            if not versions:
+                raise ChrononautException("No versions of this object exist yet.")
+            to = versions[-1]
 
-        if not isinstance(from_timestamp, datetime):
-            raise ChrononautException("The diff method takes datetime as its argument.")
-
-        if to_timestamp < from_timestamp:
-            raise ChrononautException(
-                "Diffs must be chronological. Your from_model post-dates your to."
-            )
-
-        from_model = self.version_at(from_timestamp)
-        to_model = self.version_at(to_timestamp)
         hidden = getattr(self, "__chrononaut_hidden__", [])
-        diff = {}
-
-        if not from_model and not to_model:
-            return diff
-        elif not from_model:
-            to_dict = to_model._data
-            diff = {k: (None, to_dict[k]) for k in to_dict.keys() if k not in hidden}
+        if from_model is None:
+            to_dict = to._data
+            diff = {
+                k: (None, to_dict[k]) for k in to_dict.keys() if k not in hidden and k != "version"
+            }
         else:
-            diff = from_model.diff(to_model)
-
+            diff = from_model.diff(to)
+        from_timestamp = from_model.chrononaut_meta["changed"] if from_model else datetime.now(UTC)
+        to_timestamp = to.chrononaut_meta["changed"]
         # If `include_hidden` we need to enumerate through every
         # model *since* the from_timestamp *until* the to_timestamp
         # and see if `extra_info` includes hidden columns.
@@ -201,3 +198,49 @@ class Versioned(ChangeInfoMixin):
                     break
 
         return diff
+
+    def diff_versions(self, from_version, to_version=None, include_hidden=False):
+        """Enumerate the changes from a prior model state (version ``from_version``) to a later
+        model state or the current model's state (if ``to_version`` is ``None``).
+
+        :param from_version: A version for the model to diff from.
+        :param to_version: A version to diff to or ``None`` for current version.
+        :param include_hidden: Include a hint that a hidden value has changed (without the value
+        itself).
+        :return: A dict of column names and ``(from, to)`` value tuples
+        """
+        if not isinstance(from_version, int):
+            raise ChrononautException("The diff_versions method takes integer as its argument.")
+        versions = self.versions()
+        if to_version is None:
+            if not versions:
+                raise ChrononautException("No versions of this object exist yet.")
+            to_version = versions[-1]._version
+        to_model = next(filter(lambda v: v._version == to_version, versions), None)
+        from_model = next(filter(lambda v: v._version == from_version, versions), None)
+        return self.diff(from_model, to=to_model, include_hidden=include_hidden)
+
+    def diff_timestamps(self, from_timestamp, to_timestamp=None, include_hidden=False):
+        """Enumerate the changes from a prior model state (at ``from_timestamp``) to a later
+        model state or the current model's state (if ``to_timestamp`` is ``None``).
+
+        :param from_timestamp: A point in time for the model to diff from.
+        :param to_timestamp: A point in time to diff to or ``None`` for current version.
+        :param include_hidden: Include a hint that a hidden value has changed (without the value
+        itself).
+        :return: A dict of column names and ``(from, to)`` value tuples
+        """
+        if to_timestamp is None:
+            to_timestamp = datetime.now(UTC)
+
+        if not isinstance(from_timestamp, datetime):
+            raise ChrononautException("The diff_timestamps method takes datetime as its argument.")
+
+        if to_timestamp < from_timestamp:
+            raise ChrononautException(
+                "Diffs must be chronological. Your from_model post-dates your to."
+            )
+
+        from_model = self.version_at(from_timestamp)
+        to_model = self.version_at(to_timestamp)
+        return self.diff(from_model, to_model, include_hidden=include_hidden)
