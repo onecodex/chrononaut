@@ -3,6 +3,7 @@ import os
 from enum import Enum
 
 import flask
+from flask import g, _request_ctx_stack
 import flask_security
 import flask_sqlalchemy
 import sqlalchemy
@@ -29,10 +30,8 @@ def app(request):
         random.choice(string.ascii_uppercase + string.ascii_lowercase + string.digits)
         for _ in range(8)
     )
-    ctx = app.app_context()
-    ctx.push()
-    yield app
-    ctx.pop()
+    with app.app_context():
+        yield app
 
 
 @pytest.fixture(scope="session")
@@ -50,22 +49,28 @@ def db(app, request):
     for model in models:
         setattr(db, model.__name__, model)
     db.create_all()
-    yield db
-    db.drop_all()
+    try:
+        yield db
+    finally:
+        db.drop_all()
 
 
 @pytest.fixture(scope="function")
 def strict_session(app, request):
     app.config["CHRONONAUT_REQUIRE_EXTRA_CHANGE_INFO"] = True
-    yield
-    app.config["CHRONONAUT_REQUIRE_EXTRA_CHANGE_INFO"] = False
+    try:
+        yield
+    finally:
+        app.config["CHRONONAUT_REQUIRE_EXTRA_CHANGE_INFO"] = False
 
 
 @pytest.fixture(scope="function")
 def extra_change_info(app, request):
     app.config["CHRONONAUT_EXTRA_CHANGE_INFO_FUNC"] = lambda: {"extra_field": True}
-    yield
-    app.config["CHRONONAUT_EXTRA_CHANGE_INFO_FUNC"] = None
+    try:
+        yield
+    finally:
+        app.config["CHRONONAUT_EXTRA_CHANGE_INFO_FUNC"] = None
 
 
 def generate_test_models(db):
@@ -190,7 +195,7 @@ def generate_test_models(db):
 
 
 @pytest.fixture(scope="function", autouse=True)
-def session(db, request):
+def session(db):
     """Creates a new database session for a test."""
     connection = db.engine.connect()
     transaction = connection.begin()
@@ -210,21 +215,25 @@ def session(db, request):
 
     db.session = session
 
-    yield session
-
-    transaction.rollback()
-    connection.close()
-    session.remove()
+    try:
+        yield session
+    finally:
+        transaction.rollback()
+        connection.close()
+        session.remove()
 
 
 @pytest.fixture(scope="session")
 def security_app(app, db):
     sqlalchemy_datastore = flask_security.SQLAlchemyUserDatastore(db, db.User, db.Role)
 
-    app.security = flask_security.Security(app, datastore=sqlalchemy_datastore)
-    yield app
-    app.security = None
-    app.blueprints.pop("security")
+    security = flask_security.Security(datastore=sqlalchemy_datastore)
+    security.init_app(app)
+    try:
+        yield app
+    finally:
+        app.security = None
+        app.blueprints.pop("security")
 
 
 @pytest.fixture(scope="function")
@@ -232,7 +241,7 @@ def app_client(security_app):
     yield security_app.test_client(use_cookies=True)
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def user(db, session):
     user = db.User(email="test@example.com", password="password", active=True)
     role = db.Role(name="Admin")
@@ -251,13 +260,19 @@ def anonymous_user(app_client):
 
 
 @pytest.fixture(scope="function")
-def logged_in_user(app, user):
-    with app.test_request_context(environ_base={"REMOTE_ADDR": "10.0.0.1"}):
-        original = app.login_manager._load_user_from_request
+def logged_in_user(security_app, user):
+    with security_app.test_request_context(environ_base={"REMOTE_ADDR": "10.0.0.1"}):
+        original = security_app.login_manager._load_user
+        if hasattr(g, "_login_user"):
+            delattr(g, "_login_user")
 
-        def _load_user_from_request(request):
+        def _load_user_from_request():
+            _request_ctx_stack.top.user = user
+            g._login_user = user
             return user
 
-        app.login_manager._load_user_from_request = _load_user_from_request
-        yield user
-        app.login_manager._load_user_from_request = original
+        security_app.login_manager._load_user = _load_user_from_request
+        try:
+            yield user
+        finally:
+            security_app.login_manager._load_user = original

@@ -39,16 +39,19 @@ class HistorySnapshot(object):
             "extra_info": activity_obj.extra_info,
         }
         self._untracked = untracked if untracked else []
-        self._hidden = hidden if hidden else []
+        self._hidden = set(hidden) if hidden else {}
         self._activity_obj = activity_obj
         self.__initialized__ = True
 
     def diff(self, other_history_model):
-        diff = {}
         hidden_cols = self._hidden
 
         if not other_history_model:
-            return {k: (self._data[k], None) for k in self._data.keys() if k not in hidden_cols}
+            return {
+                k: (self._data[k], None)
+                for k in self._data.keys()
+                if k not in hidden_cols and k != "version"
+            }
         elif self._version == other_history_model._version:
             # Exit early if we are comparing the same version
             return {}
@@ -58,7 +61,7 @@ class HistorySnapshot(object):
 
             all_keys = set(from_dict.keys())
             all_keys.update(to_dict.keys())
-            all_keys = all_keys.difference(hidden_cols)
+            all_keys = all_keys.difference(hidden_cols.union({"version"}))
 
             diff = {}
             for k in all_keys:
@@ -70,7 +73,7 @@ class HistorySnapshot(object):
                     # it's in both
                     if from_dict[k] != to_dict[k]:
                         diff[k] = (from_dict[k], to_dict[k])
-        return diff
+            return diff
 
     def __getattr__(self, name):
         if name == "chrononaut_meta":

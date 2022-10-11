@@ -42,7 +42,7 @@ def test_convert_model_polymorphic(db, session):
     todo.title = "New title #1"
     db.session.commit()
 
-    assert todo.diff(time_0)["title"] == ("Special Todo #1", "New title #1")
+    assert todo.diff_timestamps(time_0)["title"] == ("Special Todo #1", "New title #1")
 
 
 def test_convert_model_no_inheritance(db, session):

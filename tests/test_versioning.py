@@ -53,9 +53,10 @@ def test_model_changes(db, session):
     todo.title = "Todo #3"
     session.commit()
 
-    diff = todo.diff(time_0)
+    diff = todo.diff_timestamps(time_0)
     assert "text" in diff
     assert diff["text"] == (todo_text, None)
+    assert diff == todo.diff(todo.versions()[0])
 
     # Column `starred` becomes tracked
     untracked = getattr(todo, "__chrononaut_untracked__", [])
@@ -65,7 +66,7 @@ def test_model_changes(db, session):
     todo.title = "Todo #4"
     session.commit()
 
-    diff = todo.diff(time_0)
+    diff = todo.diff_timestamps(time_0)
     assert "starred" in diff
     assert diff["starred"] == (None, False)
 
@@ -185,7 +186,7 @@ def test_hidden_columns(db, session):
     last_todo = todo.versions()[-1]
     assert todo.title == "Not Done"
     assert last_todo.title == "Not Done"
-    todo.versions()[-2].title == "Secret Todo"
+    assert todo.versions()[-2].title == "Secret Todo"
     assert set(last_todo.chrononaut_meta["user_info"].keys()) == {"remote_addr", "user_id"}
     assert set(last_todo.chrononaut_meta["extra_info"].keys()) == {"hidden_cols_changed"}
     # Only keep hidden columns
@@ -304,7 +305,7 @@ def test_version_fetching_and_diffing(db, session):
     assert todo.has_changed_since(datetime.now(UTC)) is False
 
     # Test diff logic, note the untracked column should not show up
-    assert set(todo.diff(time_0).keys()) == {
+    assert set(todo.diff_timestamps(time_0).keys()) == {
         "created_at",
         "id",
         "title",
@@ -312,34 +313,41 @@ def test_version_fetching_and_diffing(db, session):
         "priority",
         "pub_date",
         "text",
-        "version",
     }
-    assert todo.diff(time_1)["text"] == ("Time 0", "Time Last")
-    assert todo.diff(time_2)["text"] == ("Time 9", "Time Last")
-    assert todo.diff(time_1, to_timestamp=time_2)["text"] == ("Time 0", "Time 9")
+    assert todo.diff_timestamps(time_1)["text"] == ("Time 0", "Time Last")
+    assert todo.diff_timestamps(time_2)["text"] == ("Time 9", "Time Last")
+    assert todo.diff_timestamps(time_1, to_timestamp=time_2)["text"] == ("Time 0", "Time 9")
+    assert todo.diff_timestamps(time_1) == todo.diff(first_version)
+    assert todo.diff_timestamps(time_2) == todo.diff(ninth_version)
+    assert todo.diff(first_version) == todo.diff_versions(first_version._version)
+    assert todo.diff(ninth_version) == todo.diff_versions(ninth_version._version)
 
     # You can only compare based on timestamps, not objects
     other_todo = db.Todo("Other Todo", "Time -1")
     session.add(other_todo)
     session.commit()
     with pytest.raises(chrononaut.ChrononautException) as e:
-        todo.diff(other_todo)
-    assert e._excinfo[1].args[0] == "The diff method takes datetime as its argument."
+        todo.diff_timestamps(other_todo)
+    assert e._excinfo[1].args[0] == "The diff_timestamps method takes datetime as its argument."
+
+    with pytest.raises(chrononaut.ChrononautException) as e:
+        todo.diff(time_2)
+    assert e._excinfo[1].args[0] == "`from_model` needs to be a history snapshot."
 
     # You cannot diff out of chronological order
     with pytest.raises(chrononaut.ChrononautException) as e:
-        todo.diff(time_2, to_timestamp=time_0)
+        todo.diff_timestamps(time_2, to_timestamp=time_0)
     assert e._excinfo[1].args[0].startswith("Diffs must be chronological.")
 
     # Diffs between the same history model *are* permitted however
-    assert todo.diff(time_2, to_timestamp=time_2) == {}
+    assert todo.diff_timestamps(time_2, to_timestamp=time_2) == {}
 
     # Now update a hidden column, should show with `include_hidden` option
     todo.done = True
     session.commit()
-    set(todo.diff(time_0).keys()) == {"text"}
-    set(todo.diff(time_0, include_hidden=True).keys()) == {"text", "done"}
-    assert todo.diff(time_0, include_hidden=True)["done"] == (None, True)
+    assert set(todo.diff_timestamps(time_1).keys()) == {"text"}
+    assert set(todo.diff_timestamps(time_1, include_hidden=True).keys()) == {"text", "done"}
+    assert todo.diff_timestamps(time_1, include_hidden=True)["done"] == (None, True)
 
 
 def test_null_version(db, session):
