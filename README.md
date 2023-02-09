@@ -4,6 +4,19 @@
 
 A history mixin with audit logging, record locking, and time travel (!) for PostgreSQL and Flask-SQLAlchemy. Requires Flask-SQLAlchemy >= 2.2. See [the documentation](https://chrononaut.readthedocs.io/) for more details. Development and all PRs should pass tests and linting on Github Actions, including use of [`pre-commit`](https://pre-commit.com) for automated linting with `flake8` and `black`.
 
+## Using with `rationale`
+Sometimes you may wish to additionally store a rationale for making a certain change; for these circumstances, you can make use of the `rationale` feature. Example usage:
+
+
+```
+with chrononaut.rationale("reasons"):
+    sample.product = <product>
+    db.session.commit()
+```
+If this is done, your rationale will be saved under `<version>.chrononaut_meta['extra_info']['rationale']` in the version object.
+
+*Note* `db.session.commit()` must be included within the `with` scope, otherwise the `rationale` will not be properly saved.
+
 ## Migrating from 0.2 to 0.3
 If using Alembic, database schema migration will be detected automatically.
 In other cases please look at the table located in `activity_factory` function in `models.py` file.
