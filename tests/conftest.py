@@ -1,4 +1,4 @@
-from chrononaut.flask_versioning import serialize_datetime, UTC
+from chrononaut.flask_versioning import UTC
 from datetime import datetime
 import os
 from enum import Enum
