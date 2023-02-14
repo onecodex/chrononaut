@@ -1,3 +1,4 @@
+from chrononaut.flask_versioning import UTC
 from datetime import datetime
 import os
 from enum import Enum
@@ -87,7 +88,7 @@ def generate_test_models(db):
             self.title = title
             self.text = text
             self.done = False
-            self.pub_date = datetime.utcnow()
+            self.pub_date = datetime.now(UTC)
 
     class Priority(Enum):
         LOW = "low"
@@ -126,7 +127,7 @@ def generate_test_models(db):
             self.text = text
             self.done = False
             self.starred = False
-            self.pub_date = datetime.utcnow()
+            self.pub_date = datetime.now(UTC)
             if preset_id:
                 self.id = preset_id
 
