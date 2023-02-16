@@ -12,7 +12,7 @@ pytest>=3.0.7
 pytest-cov==2.4.0
 Flask-Security-Fork==2.0.1
 Flask-WTF==1.0.1
-Werkzeug==2.0.0
+Werkzeug==2.2.3
 sphinx==1.5.5
 sphinx-autobuild==0.6.0
 Flask-Sphinx-Themes==1.0.1
