@@ -39,7 +39,7 @@ class HistorySnapshot(object):
             "extra_info": activity_obj.extra_info,
         }
         self._untracked = untracked if untracked else []
-        self._hidden = set(hidden) if hidden else {}
+        self._hidden = set(hidden) if hidden else set()
         self._activity_obj = activity_obj
         self.__initialized__ = True
 
