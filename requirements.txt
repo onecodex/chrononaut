@@ -1,5 +1,5 @@
 # Requirements
-Flask==2.1.0
+Flask==2.3.2
 Flask-SQLAlchemy==2.5.1
 SQLAlchemy==1.4.25
 psycopg2-binary>=2.8.1
