@@ -52,7 +52,7 @@ class HistorySnapshot(object):
                 for k in self._data.keys()
                 if k not in hidden_cols and k != "version"
             }
-        elif self._version == other_history_model._version:
+        elif self.chrononaut_meta["changed"] == other_history_model.chrononaut_meta["changed"]:
             # Exit early if we are comparing the same version
             return {}
         else:
