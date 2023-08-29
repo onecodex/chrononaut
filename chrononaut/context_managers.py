@@ -1,6 +1,7 @@
 from contextlib import contextmanager
 
-from flask import g, _app_ctx_stack
+from flask import g, has_app_context
+
 from chrononaut.exceptions import ChrononautException
 
 
@@ -27,7 +28,7 @@ def extra_change_info(**kwargs):
             "change_rationale": "User request"
         }
     """
-    if _app_ctx_stack.top is None:
+    if not has_app_context():
         raise ChrononautException("Can only use `extra_change_info` in a Flask app context.")
     g.__version_extra_change_info__ = kwargs
     yield
@@ -71,7 +72,7 @@ def append_change_info(obj, **kwargs):
     block for additional fields to be appended. Changes take the same form as with
     :func:`extra_change_info`.
     """
-    if _app_ctx_stack.top is None:
+    if not has_app_context():
         raise ChrononautException("Can only use `append_change_info` in a Flask app context.")
 
     if not hasattr(obj, "__versioned__"):

@@ -1,7 +1,7 @@
 # Requirements
-Flask==2.1.0
-Flask-SQLAlchemy==2.5.1
-SQLAlchemy==1.4.25
+Flask==2.3.2
+Flask-SQLAlchemy==3.0.5
+SQLAlchemy==1.4.49
 psycopg2-binary>=2.8.1
 alembic>=1.5.1
 six>=1.15.0
@@ -10,12 +10,14 @@ python-dateutil
 # Testing & documentation requirements (note these must be installable across all Tox environment)
 pytest>=3.0.7
 pytest-cov==2.4.0
-Flask-Security-Fork==2.0.1
-Flask-WTF==1.0.1
-Werkzeug==2.0.0
+Flask-Security-Too==5.3.0
+Flask-WTF==1.1.1
+Werkzeug==2.3.6
 sphinx==1.5.5
 sphinx-autobuild==0.6.0
 Flask-Sphinx-Themes==1.0.1
 bcrypt==3.1.4
 email_validator>=1.1.0
 enum34>=1.1.10
+flake8
+black==23.7.0

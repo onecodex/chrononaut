@@ -1,10 +1,12 @@
+import uuid
+
 from chrononaut.flask_versioning import UTC
 from datetime import datetime
 import os
 from enum import Enum
 
 import flask
-from flask import g, _request_ctx_stack
+from flask import g
 import flask_security
 import flask_sqlalchemy
 import sqlalchemy
@@ -36,14 +38,7 @@ def app(request):
 
 
 @pytest.fixture(scope="session")
-def unversioned_db(app, request):
-    """An unversioned db fixture."""
-    db = flask_sqlalchemy.SQLAlchemy(app)
-    yield db
-
-
-@pytest.fixture(scope="session")
-def db(app, request):
+def db(app):
     """A versioned db fixture."""
     db = chrononaut.VersionedSQLAlchemy(app)
     models = generate_test_models(db)
@@ -170,6 +165,9 @@ def generate_test_models(db):
         db.Column("role_id", db.Integer(), db.ForeignKey("role.id")),
     )
 
+    def gen_fs_uniquifier() -> str:
+        return str(uuid.uuid4())
+
     class Role(db.Model, flask_security.RoleMixin, chrononaut.Versioned):
         id = db.Column(db.Integer, primary_key=True)
         name = db.Column(db.String(80), unique=True)
@@ -187,6 +185,9 @@ def generate_test_models(db):
         roles = db.relationship(
             "Role", secondary=roles_users, backref=db.backref("users", lazy="dynamic")
         )
+        fs_uniquifier = db.Column(
+            db.String(255), unique=True, nullable=False, default=gen_fs_uniquifier
+        )
 
     class ChangeLog(db.Model, chrononaut.RecordChanges, chrononaut.Versioned):
         id = db.Column(db.Integer, primary_key=True)
@@ -202,7 +203,7 @@ def session(db):
     transaction = connection.begin()
 
     options = dict(bind=connection, binds={})
-    session = db.create_scoped_session(options=options)
+    session = db._make_scoped_session(options=options)
     session.begin_nested()
 
     # session is actually a scoped_session
@@ -243,16 +244,6 @@ def app_client(security_app):
 
 
 @pytest.fixture(scope="function")
-def user(db, session):
-    user = db.User(email="test@example.com", password="password", active=True)
-    role = db.Role(name="Admin")
-    session.add(user)
-    session.add(role)
-    session.commit()
-    yield user
-
-
-@pytest.fixture(scope="function")
 def anonymous_user(app_client):
     with app_client:
         app_client.post("/login")
@@ -261,19 +252,18 @@ def anonymous_user(app_client):
 
 
 @pytest.fixture(scope="function")
-def logged_in_user(security_app, user):
+def logged_in_user(security_app, db, session):
     with security_app.test_request_context(environ_base={"REMOTE_ADDR": "10.0.0.1"}):
-        original = security_app.login_manager._load_user
-        if hasattr(g, "_login_user"):
-            delattr(g, "_login_user")
+        user = db.User(email="test@example.com", password="password", active=True)
+        role = db.Role(name="Admin")
+        session.add(user)
+        session.add(role)
+        session.commit()
 
-        def _load_user_from_request():
-            _request_ctx_stack.top.user = user
-            g._login_user = user
-            return user
-
-        security_app.login_manager._load_user = _load_user_from_request
+        security_app.login_manager._update_request_context_with_user(user)
+        g._login_user = user
         try:
             yield user
         finally:
-            security_app.login_manager._load_user = original
+            delattr(g, "_login_user")
+            security_app.login_manager._update_request_context_with_user(None)

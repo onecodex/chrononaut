@@ -2,21 +2,13 @@
 """
 from datetime import datetime
 
-from flask import current_app, g, request
-from flask.globals import _app_ctx_stack, _request_ctx_stack
+from flask import current_app, g, request, has_request_context, has_app_context
 from sqlalchemy import Column, DateTime
 from sqlalchemy.dialects import postgresql
 
 from chrononaut.exceptions import ChrononautException
 from chrononaut.flask_versioning import fetch_change_info
 from chrononaut.flask_versioning import UTC
-
-
-def _in_flask_context():
-    if _app_ctx_stack.top is None or _request_ctx_stack.top is None:
-        return False
-    else:
-        return True
 
 
 class ChangeInfoMixin(object):
@@ -45,13 +37,14 @@ class ChangeInfoMixin(object):
 
         :return: A unique user ID string or ``None`` if not available.
         """
-        if not _in_flask_context():
+        if not has_app_context():
             return None
+
         try:
             from flask_login import current_user
 
             return current_user.email if current_user.is_authenticated else None
-        except ImportError:
+        except (ImportError, AttributeError):
             return None
 
     @classmethod
@@ -60,7 +53,7 @@ class ChangeInfoMixin(object):
 
         :return: An IP address string or ``None`` if not available.
         """
-        if not _in_flask_context():
+        if not has_request_context():
             return None
         return request.remote_addr
 
@@ -92,8 +85,8 @@ class RecordChanges(ChangeInfoMixin):
     changed = Column("changed", DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
 
-def append_recorded_changes(obj, session):
-    if session.app.config.get(
+def append_recorded_changes(obj):
+    if current_app.config.get(
         "CHRONONAUT_REQUIRE_EXTRA_CHANGE_INFO", False
     ) is True and not hasattr(g, "__version_extra_change_info__"):
         msg = (
