@@ -21,3 +21,4 @@ email_validator>=1.1.0
 enum34>=1.1.10
 flake8
 black==23.7.0
+sqlalchemy-utils

@@ -1,5 +1,7 @@
 import uuid
 
+from sqlalchemy_utils import database_exists, drop_database, create_database
+
 from chrononaut.flask_versioning import UTC
 from datetime import datetime
 import os
@@ -8,7 +10,6 @@ from enum import Enum
 import flask
 from flask import g
 import flask_security
-import flask_sqlalchemy
 import sqlalchemy
 import random
 import string
@@ -44,6 +45,11 @@ def db(app):
     models = generate_test_models(db)
     for model in models:
         setattr(db, model.__name__, model)
+    if database_exists(db.engine.url):
+        db.engine.dispose()
+        drop_database(db.engine.url)
+
+    create_database(db.engine.url)
     db.create_all()
     try:
         yield db

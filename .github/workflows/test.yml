@@ -10,11 +10,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     services:
       postgres:
-        image: postgres:11.6
+        image: postgres:14.9
         env:
-          POSTGRES_DB: chrononaut_test
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: ""
+          POSTGRES_PASSWORD: "password"
         ports:
           - 5432:5432
         # needed because the postgres container does not provide a healthcheck
@@ -23,19 +21,16 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
-        python-version: ['3.7', '3.8', '3.9', '3.10']
+        python-version: ['3.8', '3.9', '3.10', '3.11']
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Set up Python
-        uses: actions/setup-python@v1
+        uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
       - name: Display Python version
         run: python -c "import sys; print(sys.version)"
-      - name: Install virtualenv (Python2/3 compat)
-        run: |
-          pip install --progress-bar=off virtualenv
       - name: Cache virtualenv
         uses: actions/cache@v1
         id: cache-pip
@@ -45,12 +40,14 @@ jobs:
       - name: Install dependencies in a venv
         if: steps.cache-pip.outputs.cache-hit != 'true'
         run: |
-          virtualenv venv
+          python -m venv venv
           . venv/bin/activate
           pip install -q -U pip
           pip install --progress-bar=off .
           pip install --progress-bar=off -r requirements.txt
       - name: Run all tests
+        env:
+          SQLALCHEMY_DATABASE_URI: postgresql://postgres:password@localhost:5432/chrononaut_test
         run: |
           . venv/bin/activate
           py.test tests/
