@@ -1,19 +1,8 @@
 """Test basic FlaskSQLAlchemy integration points
 """
-import flask_sqlalchemy
 import sqlalchemy
 
 import chrononaut
-
-
-def test_unversioned_db_fixture(unversioned_db):
-    """Test unversioned SQLAlchemy object."""
-    assert unversioned_db.__class__ == flask_sqlalchemy.SQLAlchemy
-    assert unversioned_db.session.__class__ == sqlalchemy.orm.scoping.scoped_session
-    assert (
-        unversioned_db.session.session_factory().__class__.__name__
-        == flask_sqlalchemy.SignallingSession.__name__  # noqa
-    )
 
 
 def test_db_fixture(db):
@@ -22,7 +11,7 @@ def test_db_fixture(db):
     assert db.session.__class__ == sqlalchemy.orm.scoping.scoped_session
     assert (
         db.session.session_factory().__class__.__name__
-        == chrononaut.VersionedSignallingSession.__name__  # noqa
+        == chrononaut.VersionedSession.__name__  # noqa
     )
 
 

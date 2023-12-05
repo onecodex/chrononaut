@@ -1,6 +1,7 @@
 from contextlib import contextmanager
 
-from flask import g, _app_ctx_stack
+from flask import g, has_app_context
+
 from chrononaut.exceptions import ChrononautException
 
 
@@ -25,7 +26,7 @@ def suppress_versioning(allow_deleting_history=False):
 
     Do not nest this context manager. If possible, avoid using at all.
     """
-    if _app_ctx_stack.top is None:
+    if not has_app_context():
         raise ChrononautException("Can only use `suppress_versioning` in a Flask app context.")
     g.__suppress_versioning__ = True
     if allow_deleting_history:

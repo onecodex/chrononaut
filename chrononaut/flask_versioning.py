@@ -1,7 +1,6 @@
 """Flask versioning extension. Requires g and _app_ctx_stack in looking for extra recorded changes.
 """
-from flask import g
-from flask.globals import _app_ctx_stack
+from flask import g, current_app, has_app_context
 from datetime import datetime
 from dateutil.tz import tzutc
 import six
@@ -94,7 +93,7 @@ def _get_dirty_attributes(obj, state=None, check_relationships=False):
 def fetch_change_info(obj):
     """Returns a user and extra info context for a change."""
     user_info = obj._capture_user_info()
-    if _app_ctx_stack.top is None:
+    if not has_app_context():
         return user_info, {}
 
     extra_change_info = obj._get_custom_change_info()
@@ -169,7 +168,7 @@ def create_version(obj, session, created=False, deleted=False):
 
     snapshot = model_to_chrononaut_snapshot(obj, state)
 
-    if session.app.config.get(
+    if current_app.config.get(
         "CHRONONAUT_REQUIRE_EXTRA_CHANGE_INFO", False
     ) is True and not hasattr(g, "__version_extra_change_info__"):
         msg = (

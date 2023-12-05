@@ -77,7 +77,7 @@ def test_suppressing_version_info_delete_version_commit_out_of_scope(db, session
     assert len(todo.versions()) == 2
 
 
-def test_suppressing_version_info_delete_whole_record(db, session):
+def test_suppressing_version_info_delete_whole_record(db, session, logged_in_user):
     todo = db.SpecialTodo("Special 1", "A todo")
     session.add(todo)
     session.commit()
