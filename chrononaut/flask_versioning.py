@@ -1,5 +1,8 @@
-"""Flask versioning extension. Requires g and _app_ctx_stack in looking for extra recorded changes.
 """
+Flask versioning extension.
+Requires g and _app_ctx_stack in looking for extra recorded changes.
+"""
+
 from flask import g, current_app, has_app_context
 from datetime import datetime
 from dateutil.tz import tzutc

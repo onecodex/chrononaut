@@ -1,5 +1,5 @@
-"""Change info mixins. Require Flask for getting request and app context variables.
-"""
+"""Change info mixins. Require Flask for getting request and app context variables."""
+
 from datetime import datetime
 
 from flask import current_app, g, request, has_request_context, has_app_context
