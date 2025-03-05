@@ -2,7 +2,6 @@
 Flask>=2.3.2
 Flask-SQLAlchemy>=3.0.5
 SQLAlchemy==1.4.50
-psycopg2-binary>=2.8.1
 alembic>=1.5.1
 six>=1.15.0
 python-dateutil
@@ -20,3 +19,5 @@ enum34>=1.1.10
 flake8
 black==23.7.0
 sqlalchemy-utils
+psycopg2-binary
+setuptools

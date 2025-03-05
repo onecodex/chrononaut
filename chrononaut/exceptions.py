@@ -1,5 +1,4 @@
-"""Custom Exceptions raised by History Models
-"""
+"""Custom Exceptions raised by History Models"""
 
 
 class ChrononautException(Exception):

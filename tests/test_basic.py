@@ -1,5 +1,5 @@
-"""Test basic FlaskSQLAlchemy integration points
-"""
+"""Test basic FlaskSQLAlchemy integration points"""
+
 import sqlalchemy
 
 import chrononaut

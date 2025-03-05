@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-    chrononaut
-    ~~~~~~~~~~~~~~~~~~~
-    A history mixin for audit logging, record locking, and time travel with Flask-SQLAlchemy
-    :copyright: (c) 2017 by Reference Genomics, Inc.
-    :license: MIT, see LICENSE for more details.
+chrononaut
+~~~~~~~~~~~~~~~~~~~
+A history mixin for audit logging, record locking, and time travel with Flask-SQLAlchemy
+:copyright: (c) 2017 by Reference Genomics, Inc.
+:license: MIT, see LICENSE for more details.
 """
 
 from sqlalchemy import event
