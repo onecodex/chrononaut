@@ -20,4 +20,5 @@ flake8
 black==23.7.0
 sqlalchemy-utils
 psycopg2-binary
-setuptools
+# setuptools 81+ removed pkg_resources, which passlib (via Flask-Security-Too) still imports
+setuptools<81
