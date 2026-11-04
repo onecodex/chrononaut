@@ -26,6 +26,7 @@ setup(
         "Flask>=2.1.0",
         "Flask-SQLAlchemy>=2.5.1",
         "SQLAlchemy>=1.4.0",
+        "python-dateutil",
     ],
     extras_require={"user_info": ["Flask-Login>=0.4.0"]},
     include_package_data=True,

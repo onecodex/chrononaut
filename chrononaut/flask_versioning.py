@@ -6,7 +6,6 @@ Requires g and _app_ctx_stack in looking for extra recorded changes.
 from flask import g, current_app, has_app_context
 from datetime import datetime
 from dateutil.tz import tzutc
-import six
 import numbers
 
 from sqlalchemy import inspect
@@ -122,11 +121,7 @@ def model_to_chrononaut_snapshot(obj, state=None):
     def _default(val):
         if val is None:
             return None
-        elif (
-            isinstance(val, six.string_types)
-            or isinstance(val, numbers.Real)
-            or isinstance(val, bool)
-        ):
+        elif isinstance(val, str) or isinstance(val, numbers.Real) or isinstance(val, bool):
             return val
         elif isinstance(val, datetime):
             return serialize_datetime(val)

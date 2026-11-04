@@ -3,7 +3,6 @@ Flask>=2.3.2
 Flask-SQLAlchemy>=3.0.5
 SQLAlchemy==1.4.50
 alembic>=1.5.1
-six>=1.15.0
 python-dateutil
 
 # Testing & documentation requirements (note these must be installable across all Tox environment)
