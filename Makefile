@@ -4,8 +4,8 @@ test:
 	@echo "Successfully passed all tests (one environment only, use tox to full suite)."
 
 lint:
-	flake8 --ignore E501 chrononaut/
-	flake8 --ignore E501 tests/
+	flake8 --extend-ignore E501 chrononaut/
+	flake8 --extend-ignore E501 tests/
 	black --check -l 100 chrononaut/ tests/
 	@echo "Successfully linted all files."
 
